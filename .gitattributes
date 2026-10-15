@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.rs text eol=crlf
+*.toml text eol=crlf
+*.png binary
+*.ico binary
+*.rgba binary
+*.webp binary
+*.zip binary

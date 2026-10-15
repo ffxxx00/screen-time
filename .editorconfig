@@ -1,0 +1,11 @@
+[*.{rs,toml}]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{md,yml,yaml,ps1,py,js,css,html,txt,gitignore}]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true

@@ -1,0 +1,22 @@
+<!doctype html><html lang="es" data-theme="__DARK__"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Configuración</title><style>__CSS__</style></head><body data-view="settings"><script>__VIEW_STATE_JS__</script><main class="config"><header><h1>Configuración</h1><button id="done">Listo</button></header>
+<h2>Registro de actividad</h2><label class="settings" for="idle-pause"><span><span class="setting-title">Pausar por inactividad</span><span class="setting-desc">Tras 2 min sin teclado ni ratón</span></span><span class="switch"><input id="idle-pause" type="checkbox" role="switch" aria-describedby="idle-help"><span class="track" aria-hidden="true"></span></span></label><p id="idle-help" class="help">Desactivado: mirar o esperar en una aplicación también cuenta.</p>
+<h2>Apariencia</h2><label class="settings" for="dark-mode"><span class="setting-title">Modo nocturno</span><span class="switch"><input id="dark-mode" type="checkbox" role="switch"><span class="track" aria-hidden="true"></span></span></label><h2>Inicio de Windows</h2><label class="settings" for="autostart"><span><span class="setting-title">Iniciar con Windows</span><span class="setting-desc">En segundo plano al iniciar sesión</span></span><span class="switch"><input id="autostart" type="checkbox" role="switch"><span class="track" aria-hidden="true"></span></span></label><h2>Datos y privacidad</h2><section class="privacy-section" aria-labelledby="privacy-records"><h3 id="privacy-records">Qué se guarda</h3><p class="privacy-copy">La aplicación en primer plano, la fecha y la duración de uso. También su ubicación para mostrar el icono. Todo queda en esta PC.</p><p class="privacy-copy">No se guardan teclas, títulos ni contenido de ventanas o capturas.</p></section>
+<section class="privacy-section" aria-labelledby="privacy-location"><h3 id="privacy-location">Dónde está</h3><p id="data-location" class="privacy-copy">%LOCALAPPDATA%\HorariosTracker</p><button id="open-data-folder">Abrir carpeta</button><p class="privacy-copy">Exportar crea una copia CSV en Exportaciones y abre esa carpeta.</p><button id="export-history">Exportar CSV</button></section>
+<section class="privacy-section" aria-labelledby="privacy-delete"><h3 id="privacy-delete">Qué elimina el borrado</h3><p class="privacy-copy">El historial, las fechas de seguimiento y las ubicaciones de aplicaciones guardadas. Pide confirmación y deja el seguimiento pausado.</p><button id="clear-history" class="danger">Borrar historial…</button><p class="privacy-copy">Se conservan tus preferencias, exportaciones y copias de seguridad del instalador. Podés gestionar esas copias desde Abrir carpeta. Desinstalar también conserva los datos.</p></section><p id="status" class="help" role="status"></p></main>
+<script>
+window.updateUsage = data => {
+ document.documentElement.dataset.theme = data.darkMode ? 'dark' : 'light';
+ document.getElementById('idle-pause').checked = data.pauseWhenIdle;
+ document.getElementById('dark-mode').checked = data.darkMode;
+ document.getElementById('autostart').checked = data.autostart;
+ document.getElementById('data-location').textContent=data.dataLocation || '%LOCALAPPDATA%\\HorariosTracker';
+ window.clearUsageError(); window.markViewReady();
+};
+for (const [id, command] of [['idle-pause','set-idle-pause'],['dark-mode','set-dark-mode'],['autostart','set-autostart']]) {
+ document.getElementById(id).onchange = event => window.ipc.postMessage(JSON.stringify({command,enabled:event.target.checked}));
+}
+for(const command of ['open-data-folder','export-history','clear-history']) document.getElementById(command).onclick=()=>window.ipc.postMessage(command);
+document.getElementById('done').onclick = () => window.ipc.postMessage('close-settings');
+document.addEventListener('keydown', event => { if(event.key === 'Escape') window.ipc.postMessage('close-settings'); });
+window.ipc.postMessage('refresh');
+</script></body></html>

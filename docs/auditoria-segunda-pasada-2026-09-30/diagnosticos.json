@@ -1,0 +1,7 @@
+{
+  "fixture": "tools/render-audit.cjs; seis categorías, cobertura semanal parcial; datos sintéticos",
+  "viewport": [360, 480],
+  "day": { "beforeFirstAppTop": 610, "afterFirstAppTop": 413, "afterFullyVisibleApps": 1, "afterScrollWidth": 360 },
+  "week": { "beforeFirstAppTop": 664, "afterFirstAppTop": 413, "afterFullyVisibleApps": 1, "afterScrollWidth": 360 },
+  "edgeErrorFocus": { "enter": "load-error-title", "repeat": "retry-diagnostic", "recover": "chart" }
+}

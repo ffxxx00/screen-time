@@ -1,0 +1,24 @@
+# Perfil inicial (17 MB), archivos temporales y metadatos de IDE/Windows
+/target/
+/.agents/
+!/.agents/
+/.agents/*
+!/.agents/skills/
+/.agents/skills/*
+!/.agents/skills/screen-time-maintenance/
+/node_modules/
+/dist/
+**/*.rs.bk
+*.pdb
+*.ilk
+*.obj
+*.res
+*.tmp
+.env
+.env.*
+!.env.example
+Thumbs.db
+Desktop.ini
+.vs/
+.idea/
+.vscode/
