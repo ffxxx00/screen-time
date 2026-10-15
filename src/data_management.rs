@@ -45,7 +45,7 @@ pub fn export(csv: &Path) -> Result<PathBuf, String> {
         .join(chrono::Local::now().format("%Y%m%d-%H%M%S-%f").to_string());
     fs::create_dir_all(&folder).map_err(|error| error.to_string())?;
     fs::copy(csv, folder.join("app_usage.csv")).map_err(|error| error.to_string())?;
-    fs::write(folder.join("LEEME.txt"), "Historial local de Screen Time. CSV sin cabecera: fecha y hora local, ejecutable, segundos (con fracciones). Los días sin registros no certifican cero uso. Esta copia no se elimina al borrar el historial desde la aplicación.\r\n").map_err(|error| error.to_string())?;
+    fs::write(folder.join("LEEME.txt"), "Historial local de Screen Time. CSV sin cabecera. Filas nuevas: instante UTC RFC3339, ejecutable, segundos (con fracciones), identidad por ruta, ruta y desfase UTC en segundos. Filas antiguas: fecha y hora local sin zona, ejecutable y segundos. Las filas antiguas se conservan sin inferir su zona ni ruta. Los días sin registros no certifican cero uso. Esta copia no se elimina al borrar el historial desde la aplicación.\r\n").map_err(|error| error.to_string())?;
     Ok(folder)
 }
 

@@ -8,6 +8,7 @@ mod daily_summary;
 mod data_management;
 mod diagnostics;
 mod durability;
+mod history;
 mod icons;
 mod lifecycle;
 #[cfg(test)]
@@ -378,10 +379,7 @@ impl Tracker {
         } else {
             icons::process_path(pid)
         };
-        self.process = path
-            .as_ref()
-            .and_then(|p| p.file_name())
-            .map(|name| name.to_string_lossy().into_owned());
+        self.process = path.as_deref().map(history::identity);
         if let (Some(name), Some(path)) = (&self.process, path) {
             let key = name.to_lowercase();
             if self.process_paths.get(&key) != Some(&path) {
@@ -566,19 +564,13 @@ impl Tracker {
         if let (Some(process), Some(segment)) = (self.process.as_ref(), self.segment.take()) {
             let seconds = end.saturating_duration_since(segment.since).as_secs_f64();
             if seconds > 0.0 {
-                let mut writer = csv::WriterBuilder::new()
-                    .has_headers(false)
-                    .from_writer(Vec::new());
-                // Vec writes cannot fail; the durable journal owns the disk transaction.
-                writer
-                    .write_record([
-                        segment.wall_start.format("%Y-%m-%d %H:%M:%S").to_string(),
-                        process.clone(),
-                        format!("{seconds:.6}"),
-                    ])
-                    .expect("CSV en memoria");
-                self.pending_rows
-                    .push_back(writer.into_inner().expect("CSV en memoria"));
+                let path = self.process_paths.get(&process.to_lowercase());
+                self.pending_rows.push_back(history::encode(
+                    &segment.wall_start,
+                    process,
+                    path.map(PathBuf::as_path),
+                    seconds,
+                ));
             }
         }
         self.retry_pending();
@@ -762,7 +754,13 @@ impl Tracker {
             .sum();
         let mut rows: Vec<_> = usage.into_iter().collect();
         rows.sort_by(|a, b| b.1.iter().sum::<f64>().total_cmp(&a.1.iter().sum::<f64>()));
+        let applications = history::applications(
+            rows.iter()
+                .map(|row| row.0.as_str())
+                .chain(week_rows.iter().map(|row| row.0.as_str())),
+        );
         Ok(serde_json::json!({
+            "applications": applications,
             "labels": rows.iter().map(|row| &row.0).collect::<Vec<_>>(),
             "minutes": rows.iter().map(|row| row.1.iter().sum::<f64>() / 60.0).collect::<Vec<_>>(),
             "hourly": rows.iter().map(|row| row.1.map(|seconds| seconds / 60.0)).collect::<Vec<_>>(),
@@ -801,7 +799,11 @@ fn add_daily_segment(
         return;
     }
     let midnight = date.and_hms_opt(0, 0, 0).unwrap();
-    let offset = start.signed_duration_since(midnight).num_milliseconds() as f64 / 1000.0;
+    let distance = start.signed_duration_since(midnight);
+    let offset = distance
+        .num_microseconds()
+        .map(|value| value as f64 / 1_000_000.0)
+        .unwrap_or_else(|| distance.num_seconds() as f64);
     let begin = offset.max(0.0);
     let finish = (offset + seconds).min(86400.0);
     if finish <= begin {
@@ -951,20 +953,13 @@ fn load_chart_data(path: &Path) -> Result<Vec<(String, f64)>, String> {
         .map_err(|e| format!("No se pudo leer el CSV: {e}"))?;
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(false)
+        .flexible(true)
         .from_reader(file);
     let mut totals = BTreeMap::<String, f64>::new();
     for row in reader.records() {
         let row = row.map_err(|e| format!("El CSV contiene un registro inválido: {e}"))?;
-        if row.len() != 3 {
-            continue;
-        }
-        let (Some(name), Some(seconds)) = (row.get(1), row.get(2)) else {
-            continue;
-        };
-        if let Ok(seconds) = seconds.parse::<f64>() {
-            if seconds.is_finite() && seconds >= 0.0 {
-                *totals.entry(name.to_string()).or_default() += seconds;
-            }
+        if let Some(usage) = history::parse(&row) {
+            *totals.entry(usage.identity).or_default() += usage.seconds;
         }
     }
     let mut entries: Vec<_> = totals
@@ -1832,7 +1827,7 @@ fn run() -> Result<(), String> {
                                     images.insert(name.into(), url.clone().into());
                                 } else if !current.icons_loading && !current.unresolved_icons.contains(&key)
                                     && path.is_none_or(|path| !current.icon_cache.contains_key(path)) {
-                                    missing.push((key, path.cloned()));
+                                    missing.push((key.clone(), history::executable_path(&key).or_else(|| path.cloned())));
                                 }
                             }
                         }

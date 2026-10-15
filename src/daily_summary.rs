@@ -32,8 +32,8 @@ impl DailySummary {
         let saved = fs::read(cache)
             .ok()
             .and_then(|bytes| serde_json::from_slice::<Self>(&bytes).ok());
-        let mut summary = saved.filter(|saved| saved.version == 2).unwrap_or_default();
-        if summary.version == 2 {
+        let mut summary = saved.filter(|saved| saved.version == 3).unwrap_or_default();
+        if summary.version == 3 {
             let mut file = File::open(csv_path).map_err(|e| e.to_string())?;
             let length = file.metadata().map_err(|e| e.to_string())?.len();
             if length < summary.source_len
@@ -74,14 +74,14 @@ impl DailySummary {
             .map(|duration| duration.as_nanos())
             .unwrap_or(0);
 
-        if self.version == 2 && length == self.source_len && modified == self.source_mtime_ns {
+        if self.version == 3 && length == self.source_len && modified == self.source_mtime_ns {
             return Ok(());
         }
 
-        let trusted_append = self.version == 2
+        let trusted_append = self.version == 3
             && self.trusted_growth > 0
             && length == self.source_len.saturating_add(self.trusted_growth);
-        let can_append = self.version == 2
+        let can_append = self.version == 3
             && self.source_len > 0
             && length > self.source_len
             && (trusted_append
@@ -106,24 +106,18 @@ impl DailySummary {
             .map_err(|e| e.to_string())?;
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(false)
+            .flexible(true)
             .from_reader(&mut file);
         for record in reader.records() {
             let record = record.map_err(|e| format!("Registro inválido: {e}"))?;
-            if record.len() != 3 {
-                continue;
-            }
-            if let (Ok(start), Ok(seconds)) = (
-                NaiveDateTime::parse_from_str(&record[0], "%Y-%m-%d %H:%M:%S"),
-                record[2].parse::<f64>(),
-            ) {
-                // Checkpoints normally produce short rows; cap corrupt but finite
-                // durations so a single CSV row cannot expand into years of days.
-                if seconds.is_finite() && seconds > 0.0 && seconds <= 30.0 * 86400.0 {
+            if let Some(usage) = crate::history::parse(&record) {
+                if usage.seconds > 0.0 && usage.seconds <= 30.0 * 86400.0 {
+                    let start = usage.local_start;
                     next.first_date = Some(
                         next.first_date
                             .map_or(start.date(), |first| first.min(start.date())),
                     );
-                    next.add_segment(start, &record[1], seconds);
+                    next.add_segment(start, &usage.identity, usage.seconds);
                 }
             }
         }
@@ -134,7 +128,7 @@ impl DailySummary {
         } else {
             fingerprint(&mut file, length).map_err(|e| e.to_string())?
         };
-        next.version = 2;
+        next.version = 3;
         next.source_len = length;
         next.source_mtime_ns = modified;
         next.source_hash = source_hash;
@@ -156,7 +150,8 @@ impl DailySummary {
             let Some(next_midnight) = next_date.and_hms_opt(0, 0, 0) else {
                 break;
             };
-            let until_midnight = (next_midnight - cursor).num_seconds() as f64;
+            let until_midnight =
+                (next_midnight - cursor).num_microseconds().unwrap() as f64 / 1_000_000.0;
             let chunk = seconds.min(until_midnight);
             if chunk <= 0.0 {
                 break;
@@ -205,6 +200,65 @@ mod tests {
         io::{BufWriter, Write},
         time::Instant,
     };
+    #[test]
+    fn mixed_legacy_and_utc_rows_preserve_history_and_separate_paths_across_midnight() {
+        let mut writer = csv::WriterBuilder::new()
+            .has_headers(false)
+            .flexible(true)
+            .from_writer(Vec::new());
+        writer
+            .write_record(["2026-10-14 23:59:59", "app.exe", "0.5"])
+            .unwrap();
+        let first = crate::history::identity(Path::new(r"C:\Uno\app.exe"));
+        let second = crate::history::identity(Path::new(r"C:\Dos\app.exe"));
+        writer
+            .write_record([
+                "2026-10-15T02:59:59.500000Z",
+                "app.exe",
+                "1.25",
+                &first,
+                r"C:\Uno\app.exe",
+                "-10800",
+            ])
+            .unwrap();
+        writer
+            .write_record([
+                "2026-10-15T03:00:00Z",
+                "app.exe",
+                "0.25",
+                &second,
+                r"C:\Dos\app.exe",
+                "-10800",
+            ])
+            .unwrap();
+        let bytes = writer.into_inner().unwrap();
+        let f = Fixture::new("");
+        fs::write(&f.csv, &bytes).unwrap();
+        let s = DailySummary::load(&f.csv).unwrap();
+        assert_eq!(total(&s, "2026-10-14", "app.exe"), 0.5);
+        assert_eq!(total(&s, "2026-10-14", &first), 0.5);
+        assert_eq!(total(&s, "2026-10-15", &first), 0.75);
+        assert_eq!(total(&s, "2026-10-15", &second), 0.25);
+        let mut cache: serde_json::Value =
+            serde_json::from_slice(&fs::read(cache_path(&f.csv)).unwrap()).unwrap();
+        cache["version"] = 2.into();
+        fs::write(cache_path(&f.csv), serde_json::to_vec(&cache).unwrap()).unwrap();
+        let mut rebuilt = DailySummary::load(&f.csv).unwrap();
+        rebuilt.sync(&f.csv).unwrap();
+        assert_eq!(total(&rebuilt, "2026-10-15", &first), 0.75);
+        assert_eq!(fs::read(&f.csv).unwrap(), bytes);
+    }
+
+    #[test]
+    fn repeated_dst_hour_adds_both_elapsed_segments_once() {
+        let f=Fixture::new("2026-11-01T05:30:00Z,app.exe,60,app.exe,,-14400\n2026-11-01T06:30:00Z,app.exe,60,app.exe,,-18000\n");
+        let s = DailySummary::load(&f.csv).unwrap();
+        assert_eq!(s.day(date("2026-11-01"))["app.exe"][1], 120.0);
+        assert_eq!(
+            DailySummary::load(&f.csv).unwrap().day(date("2026-11-01"))["app.exe"][1],
+            120.0
+        );
+    }
     fn date(value: &str) -> NaiveDate {
         NaiveDate::parse_from_str(value, "%Y-%m-%d").unwrap()
     }

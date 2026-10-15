@@ -761,3 +761,19 @@ test('weekly comparison handles increases, decreases, zero and absent history', 
     p.w.document.getElementById('mode-day').click();assert.equal(comparison.hidden,true);
   } finally {p.close();}
 });
+
+test('applications with the same executable remain distinct and use readable labels', () => {
+  const p=page();
+  try {
+    const labels=['path:c:\\uno\\app.exe','path:c:\\dos\\app.exe','app.exe'];
+    const applications=Object.fromEntries(labels.map((id,i)=>[id,{name:'app.exe',suffix:i===2?'historial anterior':`C:\\${i===0?'Uno':'Dos'}`} ]));
+    const data=usage({labels,applications,minutes:[3,2,1],hourly:labels.map((_,i)=>Array.from({length:24},(_,h)=>h===10?3-i:0))});
+    p.w.updateUsage(data);
+    const names=[...p.w.document.querySelectorAll('.app-name')].map(node=>node.textContent);
+    assert.deepEqual(names,['App · C:\\Uno','App · C:\\Dos','App · historial anterior']);
+    p.w.document.querySelector('.app-button').click();
+    p.w.updateUsage({...data,icons:{[labels[0]]:'data:image/png;base64,AA=='}});
+    assert.equal(p.w.document.querySelectorAll('.app-row').length,3);
+    assert.equal(p.w.document.querySelector('.app-button').getAttribute('aria-expanded'),'true');
+  } finally {p.close();}
+});

@@ -89,8 +89,11 @@
   },afterDatasetsDraw(owner){owner.ctx.restore();}};
   const appNames = {msedge:'Microsoft Edge',chrome:'Google Chrome',firefox:'Mozilla Firefox',explorer:'Explorador de archivos',code:'Visual Studio Code',notepad:'Bloc de notas',winword:'Microsoft Word',excel:'Microsoft Excel',powerpnt:'Microsoft PowerPoint',outlook:'Microsoft Outlook',teams:'Microsoft Teams',discord:'Discord',spotify:'Spotify'};
   const appName = name => {
-    const process = name.replace(/\.exe$/i, '');
-    return appNames[process.toLowerCase()] || (/^[a-z][a-z\d _-]*$/.test(process) ? process[0].toUpperCase()+process.slice(1) : process);
+    const metadata=latest?.applications?.[name];
+    const executable=metadata?.name || (name.startsWith('path:')?name.split(/[\\/]/).pop():name);
+    const process = executable.replace(/\.exe$/i, '');
+    const display=appNames[process.toLowerCase()] || (/^[a-z][a-z\d _-]*$/.test(process) ? process[0].toUpperCase()+process.slice(1) : process);
+    return metadata?.suffix?`${display} · ${metadata.suffix}`:display;
   };
   const duration = minutes => {
     const total = Math.max(0, Math.floor(Number(minutes) + 1e-8));
@@ -636,6 +639,8 @@
     });
     const maximum = minutes[0] || 1;
     rowViews.forEach((view,i) => {
+      view.row.querySelector('.app-name').textContent=appName(view.name);
+      view.row.querySelector('.app-name').title=latest.applications?.[view.name]?.path || appName(view.name);
       view.icon.style.setProperty('--app-color',color(view.name));view.detail.style.setProperty('--app-color',color(view.name));
       view.time.textContent=duration(minutes[i]); view.button.setAttribute('aria-label',`${appName(view.name)}, ${view.time.textContent}: ${view.detail.hidden?'ver':'ocultar'} actividad por ${week?'día':'hora'}`); view.fill.style.width=`${minutes[i]/maximum*100}%`;
       view.fill.style.setProperty('--app-color',color(labels[i]));
