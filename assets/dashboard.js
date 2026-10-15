@@ -1,5 +1,31 @@
 (() => {
   let chart, latest, rowKey = '', rowViews = [], selectedHour = null, openAppName = null, viewMode = 'day', selectedWeekDay = null;
+  const usageHelp=document.querySelector('.usage-help');
+  const positionUsageHelp=()=>{
+    if(!usageHelp.open || !window.document?.documentElement)return;
+    const panel=usageHelp.querySelector('.help-content'),anchor=usageHelp.getBoundingClientRect();
+    panel.style.left=`${Math.max(8,Math.min(anchor.right-panel.offsetWidth,document.documentElement.clientWidth-panel.offsetWidth-8))}px`;
+    panel.style.top=`${Math.max(8,Math.min(anchor.bottom+8,innerHeight-panel.offsetHeight-8))}px`;
+  };
+  usageHelp.addEventListener('toggle',positionUsageHelp);
+  window.addEventListener('resize',positionUsageHelp);
+  window.addEventListener('scroll',positionUsageHelp);
+  let helpPinned=false, helpCloseTimer;
+  const showUsageHelp=()=>{clearTimeout(helpCloseTimer);usageHelp.open=true;positionUsageHelp();};
+  const hideUsageHelp=()=>{clearTimeout(helpCloseTimer);helpPinned=false;usageHelp.open=false;};
+  usageHelp.addEventListener('pointerenter',event=>{if(event.pointerType!=='touch')showUsageHelp();});
+  usageHelp.addEventListener('pointerleave',()=>{
+    helpCloseTimer=setTimeout(()=>{if(!helpPinned && !usageHelp.contains(document.activeElement))hideUsageHelp();},160);
+  });
+  usageHelp.querySelector('summary').addEventListener('focus',showUsageHelp);
+  usageHelp.querySelector('summary').addEventListener('click',event=>{
+    event.preventDefault();
+    if(helpPinned)hideUsageHelp();else {helpPinned=true;showUsageHelp();}
+  });
+  document.addEventListener('pointerdown',event=>{if(!usageHelp.contains(event.target))hideUsageHelp();});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape' && usageHelp.open){usageHelp.querySelector('summary').focus();hideUsageHelp();}});
+  document.addEventListener('focusin',event=>{if(!usageHelp.contains(event.target))hideUsageHelp();});
+  window.addEventListener('pagehide',()=>clearTimeout(helpCloseTimer));
   const palette = ['#6688b8', '#8da7c9', '#9c91bc', '#79aaa4', '#b6a0b2'];
   const otherColor='#aab7c5';
   const currentLabels = () => viewMode === 'week' ? latest?.week?.labels || [] : latest?.labels || [];

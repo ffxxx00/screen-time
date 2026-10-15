@@ -196,7 +196,6 @@ main.dashboard{max-width:none}
 .usage-help{font-size:11px;color:var(--secondary)}
 .usage-help summary{cursor:pointer;color:var(--accent);border-radius:4px;min-height:24px;display:list-item;padding:3px 0}
 
-.usage-help[open]{flex-basis:100%}
 .help-content{font-size:12px;line-height:1.5;padding:6px 0;user-select:text}
 .help-content p+p{margin-top:6px}
 .dashboard .legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px}
@@ -226,6 +225,20 @@ main.dashboard{max-width:none}
 .dashboard .date-calendar{padding:clamp(10px,calc(1vh + 5.2px),14px)}
 .dashboard .calendar-day{min-height:clamp(32px,calc(1vh + 27.2px),36px)}
 
+/* Contextual help stays outside document flow, beside settings. */
+.toolbar-actions{display:flex;align-items:center;gap:12px}
+.usage-help{position:relative;flex-shrink:0}
+.usage-help .help-content{position:fixed;left:8px;top:8px;z-index:30;width:min(300px,calc(100vw - 36px));max-height:60vh;overflow:auto;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:0 8px 28px #0003;color:var(--text)}
 .summary-values{display:flex;justify-content:space-between;align-items:center;gap:16px;width:100%}
 .week-comparison{max-width:155px;font-size:13px;line-height:1.4;color:var(--secondary);font-variant-numeric:tabular-nums}
-@media(max-width:480px){.week-comparison{max-width:130px;font-size:12px}}
+.dashboard.is-week .app-hour-bar{width:min(100%,32px);justify-self:center;border-radius:4px}
+.dashboard.is-week .app-hour-fill{border-radius:4px}
+@media(max-width:480px){.toolbar-actions{gap:8px}.dashboard .toolbar h1{font-size:25px}.usage-help summary{font-size:10px}.week-comparison{max-width:130px;font-size:12px}}
+
+.toolbar-actions .usage-help{order:-1}
+
+/* Small information control; the explanation appears on hover or keyboard focus. */
+.dashboard .usage-help summary{display:grid;place-items:center;width:32px;height:32px;min-height:32px;padding:0;border-radius:50%;color:var(--secondary);list-style:none}
+.usage-help summary::-webkit-details-marker{display:none}
+.dashboard .usage-help summary:hover,.dashboard .usage-help[open] summary{background:var(--hover);color:var(--text)}
+.usage-help .help-content{padding:12px 14px;border-radius:10px;box-shadow:0 4px 16px #0002}
