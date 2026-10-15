@@ -78,3 +78,13 @@ El error guarda el control de origen, enfoca su encabezado solo al entrar y rest
 La paleta reserva gris exclusivamente para Otras. Antes de dibujar, las cinco aplicaciones del gráfico reciben colores distintos; los cambios se sincronizan con filas, leyenda e inspector. La identidad se conserva dentro del documento cuando no colisiona con otra categoría visible; se prioriza distinguir las categorías simultáneas. No se persiste entre aperturas.
 
 La cobertura visible ocupa una línea contextual. El método completo y el comportamiento al cerrar están en `details` con resumen nativo accesible; su apertura y foco se conservan durante los snapshots. La leyenda solo identifica categorías y las duraciones quedan en la lista. Configuración agrupa información y acciones bajo Qué se guarda, Dónde está y Qué elimina el borrado, con lenguaje de usuario.
+
+## Correcciones de seguimiento y resumen (14 de octubre de 2026)
+
+El escritorio y la barra de tareas (clases Progman, WorkerW, Shell_TrayWnd y Shell_SecondaryTrayWnd) ya no crean segmentos de explorer.exe; las ventanas del Explorador siguen contando. La ventana de lifecycle registra GUID_LIDSWITCH_STATE_CHANGE y GUID_SESSION_DISPLAY_STATUS. Tapa cerrada y pantalla apagada son causas independientes de pausa, acumuladas con bloqueo y suspensión: abrir una no cancela las restantes. Pantalla atenuada permite seguimiento. Referencia: https://learn.microsoft.com/windows/win32/power/power-setting-guids.
+
+Semana compara su promedio diario registrado con el promedio de la semana anterior, usando en ambos casos días de calendario desde el inicio del historial. Sin semana anterior o divisor cero no se presenta un porcentaje. La ayuda está junto a Configuración, superpuesta y limitada al viewport; Escape, clic fuera y foco fuera la cierran. El detalle semanal limita el área de resaltado al ancho de la barra.
+
+La ayuda del encabezado usa un icono de información con tooltip al pasar el cursor o recibir foco. El clic permite fijarlo; Escape y navegación fuera lo cierran. Mantiene el control nativo summary y una descripción asociada mediante aria-describedby.
+
+El tooltip del gráfico principal se adapta a entre una y cuatro filas y se ancla sobre el extremo superior de la columna apilada. El aviso de apps adicionales se muestra al pie; el detalle completo sigue disponible mediante selección. No reserva espacio para filas ausentes ni anima cambios de posición.

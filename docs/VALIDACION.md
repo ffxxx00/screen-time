@@ -247,3 +247,35 @@ La estabilidad del color se limita al documento abierto y se conserva mientras n
 Los renders y pruebas DOM no certifican Narrador, DPI, alto contraste, varios monitores ni eventos reales de energía. Los flujos nativos de gestión de datos siguen pendientes de recorrido manual; no se borró ni exportó el historial personal durante esta validación.
 
 Compilación Release de esta segunda pasada aprobada. `tools/install-user.ps1` actualizó la instalación local, conservó el inicio automático y dejó una sola instancia activa. SHA-256 del compilado e instalado: `6750359BF4EE7AD29E595F840D2B4E5FDE67C78C1F2610B0081EA3BE3D6E5F22`. Se solicitó apertura del dashboard con `--dashboard`.
+
+## Tapa, escritorio, ayuda y comparación semanal — 14 de octubre de 2026
+
+- Rust: 38 pruebas aprobadas, dos benchmarks ignorados. Se agregaron regresiones para causas independientes de pausa de tapa/pantalla/sesión, distinción escritorio/Explorador y promedio de la semana anterior con ausencia de historial.
+- Interfaz: 36 pruebas aprobadas; comparación con incremento, disminución, cero, igualdad y ausencia de semana anterior. Sintaxis JavaScript y formato Rust aprobados.
+- Render sintético con Chart.js real en Edge headless, iframe de 360 × 800: abrir la ayuda mantiene el inicio del gráfico en 298.421875 px. Ancho del documento y viewport útil: 345 px, sin desbordamiento; ayuda entre x=8 y x=308. Barra semanal y área interactiva: 32 px. Capturas locales en target/ui-review/ (datos sintéticos).
+- Pendiente: cerrar y abrir físicamente la tapa con suspensión desactivada en la netbook; apagar/encender pantalla, combinar con bloqueo y comprobar CSV. Las pruebas de estados no certifican la entrega de eventos por firmware/controladores. No se modifica historial previo atribuido a explorer.exe porque no permite distinguir escritorio de ventanas de archivos.
+
+Compilación Release e instalación local aprobadas. Pruebas del instalador en carpeta temporal aprobadas (rollback, actualización, backups y presencia/ausencia de WebView2). SHA-256 del ejecutable instalado coincide con el compilado; una instancia activa, autoarranque conservado y apertura del dashboard solicitada.
+
+## Ayuda mediante tooltip — 14 de octubre de 2026
+
+«Sobre estos datos» ahora se presenta como icono de información junto a Configuración. El tooltip se abre con hover o foco de teclado; un clic lo fija y otro lo cierra. Escape, clic fuera y foco fuera lo cierran. El breve retraso de salida permite mover el puntero al texto sin perderlo. Conserva posición limitada al viewport y no desplaza contenido.
+
+36 pruebas de interfaz y sintaxis JavaScript aprobadas. Recorrido sintético adicional de hover, Escape y clic aprobado. Render con Chart.js real en iframe de 360 px revisado en Edge headless; captura local en target/ui-review/tooltip.png.
+
+Tooltip: compilación Release e instalación local aprobadas, hash del ejecutable verificado y dashboard actualizado abierto.
+
+## Tooltip del gráfico principal — 14 de octubre de 2026
+
+Día y Semana ajustan el tooltip a las filas reales (hasta cuatro) en lugar de reservar cuatro filas vacías. Ancho de 244 px, filas de 26 px, colores asociados a las categorías y aviso de aplicaciones restantes al pie. Se eliminó el deslizamiento de posición y la escala animada; conserva una transición breve de opacidad. Se posiciona sobre el extremo superior de la pila, con ajuste a los límites de la ventana.
+
+36 pruebas de interfaz aprobadas y sintaxis JavaScript correcta. Render sintético en Edge con Chart.js real: Día oscuro con una app, 244 × 70 px; Semana clara con cuatro filas y aviso de dos adicionales, 244 × 169 px. Captura local: target/ui-review/chart-hover-final.png. El tooltip sigue sin interceptar clics ni rueda; el inspector conserva la lista completa.
+
+Gráfico principal: Release e instalación local aprobadas; hash compilado e instalado coinciden. Dashboard actualizado abierto.
+
+
+## Nombre de Windows y reconstrucción de Git — 14 de octubre de 2026
+
+El recurso FileDescription ahora contiene Screen Time, igual que ProductName. Compilación Release e instalación local aprobadas; lectura de VersionInfo del ejecutable instalado confirma ambos nombres y su SHA-256 coincide con el compilado.
+
+La base reconstruida previa a las correcciones de esta sesión aprobó 35 pruebas de interfaz y 35 pruebas Rust (dos benchmarks ignorados). Las etapas de comparación semanal y ayuda contextual se verificaron por separado. El estado final conserva las 36 pruebas de interfaz aprobadas. Véase HISTORIAL-RECONSTRUIDO.md para el origen y límites de este historial.

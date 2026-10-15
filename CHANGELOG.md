@@ -4,6 +4,16 @@ Los cambios notables de este proyecto se documentan aquí. El historial anterior
 
 ## 0.2.0 — En desarrollo
 
+Correcciones del 14/10/2026:
+- Exclusión del escritorio y la barra de tareas del conteo de explorer.exe, conservando las ventanas del Explorador.
+- Pausa por tapa cerrada o pantalla apagada, independiente de suspensión y bloqueo.
+- Comparación semanal del promedio diario mediante flecha y porcentaje respecto de la semana anterior.
+- Ayuda contextual mediante icono de información y tooltip con soporte de teclado y clic.
+- Resaltado del detalle semanal limitado al ancho de cada barra.
+- Tooltip principal con altura según contenido, colores por categoría y posición sobre la columna.
+- Nombre Screen Time en el Administrador de tareas.
+- Publicación inicial con historial reconstruido; véase docs/HISTORIAL-RECONSTRUIDO.md.
+
 Segunda pasada de auditoría del 30/09/2026:
 - Foco visible al entrar en error y recuperación al resolverlo, sin saltos durante reintentos automáticos.
 - Cinco categorías simultáneas con colores distintos y gris exclusivo de Otras; identidad limitada a la consulta.
