@@ -13,7 +13,7 @@ BEGIN
  BEGIN
   BLOCK "040904B0"
   BEGIN
-   VALUE "FileDescription", "Screen Time - Seguimiento de uso\0"
+   VALUE "FileDescription", "Screen Time\0"
    VALUE "FileVersion", "0.2.0\0"
    VALUE "InternalName", "screen-time\0"
    VALUE "OriginalFilename", "screen-time.exe\0"
