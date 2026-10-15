@@ -11,6 +11,12 @@ if ((Get-FileHash -LiteralPath $setup).Hash.ToLowerInvariant() -ne $expected) { 
 $before = @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter 'screen-time-setup-*' | ForEach-Object Name)
 $verify = Start-Process -FilePath $setup -ArgumentList '--verify' -PassThru -Wait -WindowStyle Hidden
 if ($verify.ExitCode -ne 0) { throw 'El EXE no pudo verificar y extraer el paquete incrustado.' }
+$savedModulePath = $env:PSModulePath
+try {
+    $env:PSModulePath = Join-Path ([IO.Path]::GetTempPath()) 'screen-time-missing-modules'
+    $isolated = Start-Process -FilePath $setup -ArgumentList '--verify' -PassThru -Wait -WindowStyle Hidden
+    if ($isolated.ExitCode -ne 0) { throw 'El instalador depende del PSModulePath del proceso que lo inicia.' }
+} finally { $env:PSModulePath = $savedModulePath }
 $after = @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter 'screen-time-setup-*' | ForEach-Object Name)
 if (@($after | Where-Object { $before -notcontains $_ }).Count) { throw 'La verificación dejó archivos temporales.' }
 $invalid = Start-Process -FilePath $setup -ArgumentList '--invalid' -PassThru -Wait -WindowStyle Hidden

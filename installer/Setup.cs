@@ -96,15 +96,23 @@ internal static class Setup
                 if (!File.Exists(Path.Combine(root, name))) throw new InvalidOperationException("Paquete incompleto: " + name);
             if (FileVersionInfo.GetVersionInfo(Path.Combine(root, "screen-time.exe")).FileDescription != "Screen Time")
                 throw new InvalidOperationException("El ejecutable del paquete no corresponde a Screen Time.");
-            if (verifyOnly) return;
-
             string powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+            string runner = Path.Combine(root, "run.ps1");
+            string action = verifyOnly
+                ? "$null = Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'screen-time.exe')\r\n"
+                : "& (Join-Path $PSScriptRoot 'tools/install-user.ps1') -SourceDirectory $PSScriptRoot\r\n";
+            File.WriteAllText(runner, "$ErrorActionPreference = 'Stop'\r\n[Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)\r\n$OutputEncoding = [Console]::OutputEncoding\r\n" + action, new UTF8Encoding(true));
             ProcessStartInfo start = new ProcessStartInfo(powershell,
-                "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File " + Quote(Path.Combine(root, "tools", "install-user.ps1")) + " -SourceDirectory " + Quote(root));
+                "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File " + Quote(runner));
             start.UseShellExecute = false;
             start.CreateNoWindow = true;
             start.RedirectStandardOutput = true;
             start.RedirectStandardError = true;
+            start.StandardOutputEncoding = Encoding.UTF8;
+            start.StandardErrorEncoding = Encoding.UTF8;
+            // A parent running PowerShell 7 can export module paths incompatible
+            // with Windows PowerShell 5.1. Use its own trusted built-in modules.
+            start.EnvironmentVariables["PSModulePath"] = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "Modules");
             start.WorkingDirectory = root;
             using (Process process = Process.Start(start))
             {
