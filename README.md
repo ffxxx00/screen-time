@@ -66,7 +66,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\install-user.ps1
 
 El script prepara los archivos, cierra limpiamente las instancias anteriores o actuales, respalda `app_usage.*` y actualiza `%LOCALAPPDATA%\Programs\Screen Time`. Crea accesos directos y conserva el inicio automático; comprueba que el nuevo proceso creó su ventana de sesión y revierte la actualización si el arranque falla. Tras un arranque correcto retira el ejecutable y los accesos directos que apuntan a la instalación anterior. Conserva cualquier otro archivo de esa carpeta. No necesita elevación. Conserva las cinco copias de datos más recientes del instalador.
 
-Para distribuir una compilación, ejecuta `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\package-release.ps1`. El ZIP en `dist/` incluye **Instalar.cmd** y se genera junto con un checksum SHA-256. Extrae el ZIP antes de ejecutar el instalador; no necesita el checkout ni la carpeta `target`.
+Para distribuir una compilación, ejecuta `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\package-release.ps1` y luego `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\build-setup.ps1`. En `dist/` quedan el ZIP y **screen-time-0.3.0-setup-x64.exe**, ambos con SHA-256. El EXE ofrece un asistente gráfico por usuario, conserva historial y preferencias y no requiere permisos de administrador. Como alternativa, extrae el ZIP y ejecuta **Instalar.cmd**.
 
 El acceso directo **Screen Time** abre el dashboard. En el icono de bandeja, el doble clic izquierdo abre el dashboard; el clic derecho muestra el menú con **Abrir**, **Pausar/Reanudar seguimiento** y **Salir**. La pausa manual también está en el dashboard y se conserva al reiniciar; cerrar la ventana mantiene el seguimiento.
 
@@ -80,7 +80,7 @@ Todo el historial pertenece al usuario de Windows y permanece en:
 %LOCALAPPDATA%\HorariosTracker\
 ```
 
-- `app_usage.csv`: fecha/hora local, nombre del ejecutable y duración en segundos.
+- `app_usage.csv`: historial compatible con filas antiguas; los registros nuevos guardan UTC, ejecutable, duración, identidad por ruta, ruta y desfase horario.
 - `app_usage.daily.json`: resumen diario regenerable para consultar el historial sin recorrer todo el CSV en cada actualización.
 - `app_usage.coverage.json`: fechas en que el tracker estuvo activo, incluso si no registró uso. Permite distinguir «sin uso» de «sin medición»; en días anteriores a esta versión, un día sin filas CSV queda como «sin medición».
 
@@ -99,13 +99,18 @@ Para cambiar o borrar tus datos, cierra primero el tracker desde la bandeja. Lue
 
 ## Formato del historial
 
-El CSV no tiene encabezado. Cada fila tiene tres campos:
+El CSV no tiene encabezado. Desde 0.3.0, cada fila nueva contiene seis campos:
 
 ```text
-YYYY-MM-DD HH:MM:SS,nombre_proceso.exe,segundos
+inicio_utc_rfc3339,ejecutable,segundos,identidad,ruta,desfase_utc_segundos
+2026-10-15T13:00:00.123456Z,app.exe,12.500000,path:c:\apps\app.exe,C:\Apps\app.exe,-10800
 ```
 
-La hora es local. Los segundos se guardan con seis decimales. CSV estándar permite entrecomillar nombres que contengan comas. El dashboard reparte cada fila por los tramos horarios del día, incluidos los que cruzan la medianoche. Los registros históricos no contienen zona horaria ni offsets UTC.
+El instante se guarda en UTC con microsegundos; el desfase conserva la hora y el día locales en que se registró. Las duraciones provienen del reloj monotónico. La identidad usa la ruta normalizada, de modo que dos ejecutables con el mismo nombre en carpetas distintas tienen filas separadas. Si coinciden sus nombres, el dashboard muestra la carpeta para distinguirlos.
+
+Las filas anteriores de tres campos (`fecha local,ejecutable,segundos`) siguen siendo válidas y no se reescriben. Su zona horaria y ruta no se pueden reconstruir con certeza. El dashboard las mantiene como historial anterior cuando coincide un nombre con registros nuevos. El índice se regenera automáticamente y CSV estándar permite rutas con comas o caracteres Unicode.
+
+Para volver a una versión anterior a 0.3.0, restaurá primero el respaldo `pre-install-*` creado al actualizar, con el tracker cerrado. Las versiones anteriores no leen el formato nuevo. Una actualización fallida restaura los datos anteriores y conserva aparte las escrituras del intento fallido.
 
 ## Arquitectura
 

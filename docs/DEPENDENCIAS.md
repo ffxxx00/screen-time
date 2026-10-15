@@ -30,3 +30,8 @@ Wry usa el Microsoft Edge WebView2 Runtime Evergreen instalado en Windows. El ru
 ## Recurso Win32
 
 `assets/app.ico` y `assets/app.rc` incluyen el icono y metadatos de versión en el ejecutable mediante `rc.exe`, proporcionado por el Windows SDK. El script `tools/generate_icon.py` es opcional y solo se requiere al editar o regenerar los assets PNG/ICO; necesita Pillow.
+
+
+## Asistente de instalación
+
+El setup se compila con `csc.exe` de .NET Framework incluido en Windows 10/11 x64. Usa Windows Forms, compresión ZIP y SHA-256 del propio framework; no descarga dependencias ni requiere un servidor o compilador adicional en el equipo del usuario. PowerShell 5.1 ejecuta la transacción de instalación incluida.

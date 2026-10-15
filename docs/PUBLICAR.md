@@ -32,3 +32,6 @@ Esta guía es para el mantenedor del proyecto. Subir el código a GitHub y etiqu
 ## Firma y advertencias de Windows
 
 Para uso propio, se puede ejecutar una compilación local sin firmar según la política del equipo. Para distribuir fuera de GitHub, considera firma Authenticode y publica siempre SHA-256. Una firma no asegura automáticamente reputación SmartScreen para cada descarga nueva; consulta [la guía oficial de SmartScreen](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation).
+
+
+Desde 0.3.0, después de generar el ZIP ejecuta `tools/build-setup.ps1`. Produce `screen-time-0.3.0-setup-x64.exe` y su checksum. `tests/setup.test.ps1` valida el EXE, su extracción, rechazo de un paquete alterado y limpieza de temporales. El asistente requiere .NET Framework de Windows 10/11 y usa el mismo instalador por usuario, con WebView2 como requisito previo. En CI se publican ZIP, setup y checksums como artefactos. La firma Authenticode sigue siendo una decisión de distribución independiente.

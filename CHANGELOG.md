@@ -2,7 +2,16 @@
 
 Los cambios notables de este proyecto se documentan aquí. El historial anterior a esta documentación no fue reconstruido a partir de commits publicados.
 
-## 0.2.0 — En desarrollo
+## 0.3.0 — En desarrollo
+
+- Instalador gráfico EXE por usuario con verificación del paquete, progreso, actualización y recuperación de archivos y datos.
+- Registros nuevos con instante UTC, microsegundos y desfase de hora local; lectura compatible del historial antiguo sin reescritura.
+- Identidad por ruta para separar aplicaciones homónimas y distinguir sus iconos, ranking y selección.
+- Índice diario versión 3 y división precisa de segmentos fraccionarios al cruzar medianoche.
+- Pruebas de historial mixto, cambios horarios, homónimos y setup con paquete alterado.
+- Pruebas reales de hardware y varios días de funcionamiento confirmados por el usuario.
+
+## 0.2.0
 
 Correcciones del 14/10/2026:
 - Exclusión del escritorio y la barra de tareas del conteo de explorer.exe, conservando las ventanas del Explorador.

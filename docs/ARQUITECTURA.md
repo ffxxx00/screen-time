@@ -49,7 +49,7 @@ El instalador hace una copia de seguridad de `app_usage.*` antes de reemplazar e
 
 ## Límites
 
-Los tiempos se almacenan como hora local sin zona ni offset UTC. En ajustes retroactivos de zona horaria o cambios de horario de verano, el CSV no aporta información suficiente para reconstruir inequívocamente los instantes.
+Desde 0.3.0 los registros nuevos guardan UTC y el desfase local del inicio; mantienen un instante inequívoco aunque se repita una hora. Los registros antiguos sin zona conservan esa limitación. El gráfico usa el día y la hora del lugar donde se registró el segmento, incluso si después cambia la zona del equipo. El desfase queda fijo para cada segmento (normalmente hasta 60 segundos); un cambio de zona o DST dentro de ese intervalo se refleja al comenzar el siguiente segmento.
 
 La marca diaria indica que el tracker funcionó en algún momento del día; no certifica cobertura continua de 24 horas. Los días históricos sin filas CSV ni marca se muestran como «Sin medición», incluso si en realidad hubo cero uso. Una PC apagada tampoco puede medirse desde esta aplicación.
 
@@ -88,3 +88,14 @@ Semana compara su promedio diario registrado con el promedio de la semana anteri
 La ayuda del encabezado usa un icono de información con tooltip al pasar el cursor o recibir foco. El clic permite fijarlo; Escape y navegación fuera lo cierran. Mantiene el control nativo summary y una descripción asociada mediante aria-describedby.
 
 El tooltip del gráfico principal se adapta a entre una y cuatro filas y se ancla sobre el extremo superior de la columna apilada. El aviso de apps adicionales se muestra al pie; el detalle completo sigue disponible mediante selección. No reserva espacio para filas ausentes ni anima cambios de posición.
+
+
+## Formato 0.3.0 e instalador ejecutable
+
+`src/history.rs` centraliza identidad, escritura y lectura. Las filas nuevas tienen seis columnas: UTC RFC3339 con microsegundos, ejecutable, segundos, identidad `path:` por ruta normalizada sin distinguir mayúsculas, ruta y desfase UTC en segundos. El lector CSV flexible acepta filas nuevas y antiguas mezcladas. Los datos antiguos no se reescriben ni se atribuyen a una ruta inferida. La identidad distingue ubicaciones; no intenta distinguir binarios reemplazados en una misma ruta ni resolver enlaces a un mismo archivo.
+
+El índice pasa a versión 3 y se reconstruye desde el CSV. La división por día conserva microsegundos al cruzar medianoche. Los IDs se mantienen en gráfico, selección, ranking e iconos; la presentación traduce el nombre y agrega carpeta o «historial anterior» cuando hay colisiones.
+
+`installer/Setup.cs` genera un asistente Windows Forms x64 con .NET Framework de Windows 10/11. `tools/build-setup.ps1` incrusta el ZIP y su SHA-256 en un EXE gráfico sin elevación. Verifica el recurso, valida las rutas al extraer y ejecuta el instalador transaccional con una ventana de progreso. Un mutex impide ejecutar dos asistentes a la vez. La desinstalación permanece registrada en Windows. `--verify` comprueba extracción e integridad sin instalar; `--silent` realiza la misma instalación sin interfaz.
+
+La actualización respalda el historial antes del reemplazo. Si falla el arranque, restaura archivos, accesos directos, Registro y datos originales antes de reiniciar la versión anterior; conserva las escrituras fallidas en el respaldo. Un downgrade manual anterior a 0.3.0 requiere restaurar ese respaldo, porque el lector antiguo no acepta seis columnas.

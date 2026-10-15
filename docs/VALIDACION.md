@@ -279,3 +279,25 @@ Gráfico principal: Release e instalación local aprobadas; hash compilado e ins
 El recurso FileDescription ahora contiene Screen Time, igual que ProductName. Compilación Release e instalación local aprobadas; lectura de VersionInfo del ejecutable instalado confirma ambos nombres y su SHA-256 coincide con el compilado.
 
 La base reconstruida previa a las correcciones de esta sesión aprobó 35 pruebas de interfaz y 35 pruebas Rust (dos benchmarks ignorados). Las etapas de comparación semanal y ayuda contextual se verificaron por separado. El estado final conserva las 36 pruebas de interfaz aprobadas. Véase HISTORIAL-RECONSTRUIDO.md para el origen y límites de este historial.
+
+
+## Validación de uso confirmada por el usuario — 15 de octubre de 2026
+
+El usuario confirmó que ya realizó las comprobaciones de hardware descritas en la evaluación de preparación (tapa, estados de pantalla y energía) y que la aplicación funciona bien. También confirmó varios días de funcionamiento registrados. Esta evidencia corresponde a su declaración y su equipo; no se presenta como una repetición realizada por el agente ni como validación en todos los equipos o en Windows limpio.
+
+## UTC, identidad por ruta e instalador 0.3.0 — 15 de octubre de 2026
+
+44 pruebas Rust aprobadas; dos benchmarks ignorados. Cobertura nueva: mezcla de filas antiguas y nuevas sin reescritura del CSV, UTC con microsegundos y desfase, rutas con comas, identidad insensible a mayúsculas, nombres homónimos separados, hora repetida de DST, cruce fraccional de medianoche y regeneración del índice anterior. Se conservan las regresiones de journal, corte de proceso, conflicto, pausa y medianoche. Compilación Release aprobada.
+
+Las pruebas del instalador transaccional también verifican restauración del CSV y preferencias previos, eliminación del índice nuevo, conservación de las escrituras fallidas y rechazo de una ruta de respaldo ajena.
+
+37 pruebas de interfaz aprobadas, incluida la separación de aplicaciones homónimas y conservación de foco/selección. Formato Rust y sintaxis JavaScript aprobados. Setup EXE aprobado: SHA-256, extracción de recursos, rechazo de paquete alterado, argumentos, temporales y subsistema gráfico. ZIP y desinstalador aprobados en carpetas temporales. Se revisó el asistente mediante render de Windows Forms, conservado localmente en target/ui-review/setup-preview.png.
+
+El render sintético del dashboard con tres identidades de `app.exe` muestra por separado `App · C:\Uno`, `App · C:\Dos` y `App · historial anterior`, con ranking y colores independientes. Captura local: target/ui-review/identity.png.
+
+
+Instalación real con el EXE 0.3.0 aprobada mediante el mismo flujo `Deploy` del asistente, en modo silencioso. Se verificaron ProductVersion=0.3.0, FileDescription=Screen Time y SHA-256 del binario instalado frente al compilado. El prefijo completo del CSV previo a actualizar conserva exactamente los mismos bytes. Se comprobaron registros nuevos reales con UTC, identidad por ruta y ruta, y el índice diario versión 3. Quedó una sola instancia y se abrió el dashboard actualizado.
+
+La primera prueba integral detectó un PSModulePath heredado de PowerShell 7 que impedía cargar Get-FileHash en Windows PowerShell. Esa instalación se revirtió, reinició 0.2.0 y conservó el historial. El asistente ahora fija los módulos propios de Windows PowerShell y UTF-8; la verificación también ejecuta el motor sin instalar y una regresión prueba un PSModulePath deliberadamente incompatible.
+
+Estos resultados complementan las comprobaciones de hardware declaradas por el usuario; no certifican aún la instalación del nuevo asistente en un Windows 10/11 limpio de otro equipo.

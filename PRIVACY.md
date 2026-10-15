@@ -4,8 +4,8 @@ Screen Time crea un historial de uso de aplicaciones en primer plano en el mismo
 
 ## Qué registra
 
-- Hora local de cada segmento de seguimiento.
-- Nombre del ejecutable en primer plano.
+- Instante UTC y desfase de la hora local de cada segmento nuevo; los registros anteriores conservan su fecha local.
+- Nombre y ruta normalizada del ejecutable en primer plano, usados para distinguir aplicaciones homónimas.
 - Duración del segmento en segundos.
 - Ruta local del ejecutable, guardada para buscar y mostrar su icono.
 - Preferencias de pantalla, pausa opcional por inactividad, tamaños de ventanas y estado de inicio automático en el Registro del usuario.
