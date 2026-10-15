@@ -507,7 +507,7 @@ test('late icons reuse rows and hover never enters the dashboard layout or hitbo
     p.w.dispatchEvent(new p.w.Event('resize')); assert.equal(tip.hidden, true);
   } finally { p.close(); }
 });
-test('main chart tooltip keeps four fixed rows and exposes extra apps in the persistent inspector', () => {
+test('main chart tooltip fits its content and exposes extra apps in the persistent inspector', () => {
   const p=page();
   try {
     const hourly=Array.from({length:6},(_,app)=>Array.from({length:24},(_,hour)=>hour===10?app+1:hour===11&&app===0?2:0));
@@ -516,13 +516,13 @@ test('main chart tooltip keeps four fixed rows and exposes extra apps in the per
     hover(10);
     const tip=p.w.document.getElementById('usage-tooltip'), list=tip.querySelector('.tooltip-list');
     assert.equal(list.children.length,4);
-    assert.equal(p.w.getComputedStyle(list).height,'112px');
-    assert.equal(p.w.getComputedStyle(list.firstChild).height,'28px');
+    assert.equal(p.w.getComputedStyle(list).height,'auto');
+    assert.equal(p.w.getComputedStyle(list.firstChild).height,'26px');
     assert.equal(tip.querySelector('.tooltip-hint').hidden,false);
     assert.match(tip.querySelector('.tooltip-hint').textContent,/\+2/);
     hover(11);
     assert.equal(list.children.length,1);
-    assert.equal(p.w.getComputedStyle(list).height,'112px');
+    assert.equal(p.w.getComputedStyle(list).height,'auto');
     assert.equal(tip.querySelector('.tooltip-hint').hidden,true);
   } finally { p.close(); }
 });

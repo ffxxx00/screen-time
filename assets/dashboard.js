@@ -127,10 +127,11 @@
   const tooltipList=el('div','tooltip-list');
   const tooltipHint=el('span','tooltip-hint');
   const positionTooltip=()=>{
-    const margin=8, gap=18, width=tooltip.offsetWidth, height=tooltip.offsetHeight;
-    const left=tooltipAnchor.x+gap+width<=innerWidth-margin ? tooltipAnchor.x+gap : tooltipAnchor.x-gap-width;
+    const margin=8, gap=12, width=tooltip.offsetWidth, height=tooltip.offsetHeight;
+    const left=tooltipAnchor.x-width/2;
+    const top=tooltipAnchor.y-height-gap>=margin ? tooltipAnchor.y-height-gap : tooltipAnchor.y+gap;
     tooltip.style.left=`${Math.max(margin,Math.min(left,innerWidth-width-margin))}px`;
-    tooltip.style.top=`${Math.max(margin,Math.min(tooltipAnchor.y-height/2,innerHeight-height-margin))}px`;
+    tooltip.style.top=`${Math.max(margin,Math.min(top,innerHeight-height-margin))}px`;
   };
   const clearTooltipTimers = () => {
     clearTimeout(hideTimer); clearTimeout(concealTimer);
@@ -164,18 +165,20 @@
     const sameHour=activeHour===hour; activeHour=hour;
     const header=el('div','tooltip-header');
     const heading = el('strong','tooltip-heading',viewMode==='week'?dayName(latest.week.days[hour]):hourRange(hour));
-    header.append(heading,tooltipHint);
+    header.append(heading);
     const rows = entries.slice(0,4).map(entry=>{
       const row=el('div','tooltip-row');
       const name=el('span','tooltip-name',appName(entry.name));
-      row.append(name,el('span','tooltip-time',duration(entry.minutes))); return row;
+      const swatch=el('span','swatch');swatch.setAttribute('aria-hidden','true');
+      swatch.style.setProperty('--app-color',labels.indexOf(entry.name)<5?color(entry.name):otherColor);
+      row.append(swatch,name,el('span','tooltip-time',duration(entry.minutes))); return row;
     });
     if(!rows.length) rows.push(el('div','tooltip-row',latest.week.measuredDays?.[hour]?'Sin uso registrado':'Sin medición'));
     const scroll = sameHour ? tooltipList.scrollTop : 0;
     tooltipList.replaceChildren(...rows);
     tooltipHint.textContent=`+${Math.max(0,entries.length-4)} más · seleccioná`;
     tooltipHint.hidden=entries.length<=4;
-    tooltip.replaceChildren(header,tooltipList); tooltip.hidden=false;
+    tooltip.replaceChildren(header,tooltipList,tooltipHint); tooltip.hidden=false;
     tooltipList.scrollTop=scroll;
     positionTooltip();
     // Commit the transparent starting style after removing display:none.
@@ -186,7 +189,9 @@
   const externalTooltip = ({chart:owner,tooltip: model}) => {
     if (!latest || !model.opacity || !model.dataPoints?.length) { scheduleTooltipHide(); return; }
     const rect=owner.canvas.getBoundingClientRect();
-    tooltipAnchor={x:rect.left+(model.caretX || 0),y:rect.top+(model.caretY || 0)};
+    const index=model.dataPoints[0].dataIndex;
+    const tops=(owner.getSortedVisibleDatasetMetas?.() || []).map(meta=>meta.data[index]).filter(bar=>bar && Number.isFinite(bar.y) && bar.y!==bar.base).map(bar=>bar.y);
+    tooltipAnchor={x:rect.left+(model.caretX || 0),y:rect.top+(tops.length?Math.min(...tops):(model.caretY || 0))};
     showTooltip(model.dataPoints[0].dataIndex);
   };
   const inspector=document.getElementById('hour-inspector');
