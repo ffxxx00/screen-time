@@ -733,6 +733,33 @@ impl Tracker {
             0
         };
         let week_total = daily_totals.iter().sum::<f64>();
+        let previous_start = week_start.checked_sub_days(Days::new(7)).unwrap();
+        let previous_end = week_start.pred_opt().unwrap();
+        let previous_average_start = previous_start.max(first_date);
+        let previous_days = if previous_end >= previous_average_start {
+            (previous_end - previous_average_start).num_days() as usize + 1
+        } else {
+            0
+        };
+        let previous_total: f64 = (0..7)
+            .map(|i| {
+                let day = previous_start.checked_add_days(Days::new(i)).unwrap();
+                let mut day_usage = summary.day(day);
+                if let (Some(name), Some(segment)) = (&self.process, &self.segment) {
+                    add_daily_segment(
+                        &mut day_usage,
+                        day,
+                        segment.wall_start.naive_local(),
+                        name,
+                        end.saturating_duration_since(segment.since).as_secs_f64(),
+                    );
+                }
+                day_usage
+                    .values()
+                    .map(|hours| hours.iter().sum::<f64>() / 60.0)
+                    .sum::<f64>()
+            })
+            .sum();
         let mut rows: Vec<_> = usage.into_iter().collect();
         rows.sort_by(|a, b| b.1.iter().sum::<f64>().total_cmp(&a.1.iter().sum::<f64>()));
         Ok(serde_json::json!({
@@ -745,6 +772,7 @@ impl Tracker {
                 "measuredDays": measured_days,
                 "averageMinutes": if average_days > 0 { week_total / average_days as f64 } else { 0.0 },
                 "averageDays": average_days,
+                "previousAverageMinutes": if previous_days > 0 { Some(previous_total / previous_days as f64) } else { None },
                 "labels": week_rows.iter().map(|row| &row.0).collect::<Vec<_>>(),
                 "minutes": week_rows.iter().map(|row| row.1.iter().sum::<f64>()).collect::<Vec<_>>(),
                 "daily": week_rows.iter().map(|row| row.1).collect::<Vec<_>>()
@@ -1087,6 +1115,25 @@ mod tests {
         for class in ["CabinetWClass", "ExploreWClass", "Chrome_WidgetWin_1"] {
             assert!(!is_shell_surface(class));
         }
+    }
+
+    #[test]
+    fn previous_week_average_uses_calendar_days_and_missing_history_is_null() {
+        let file = TestFile::new("previous-week");
+        fs::write(
+            &file.0,
+            "2026-09-14 10:00:00,example.exe,4200\n2026-09-21 10:00:00,example.exe,8400\n",
+        )
+        .unwrap();
+        let mut tracker = Tracker::new(file.0.clone()).unwrap();
+        let date = NaiveDate::from_ymd_opt(2026, 9, 21).unwrap();
+        let snapshot = tracker.snapshot(date).unwrap();
+        assert_eq!(snapshot["week"]["previousAverageMinutes"], 10.0);
+        assert_eq!(snapshot["week"]["averageMinutes"], 20.0);
+        let first = tracker
+            .snapshot(date.checked_sub_days(Days::new(7)).unwrap())
+            .unwrap();
+        assert!(first["week"]["previousAverageMinutes"].is_null());
     }
 
     #[test]

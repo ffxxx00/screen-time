@@ -744,3 +744,20 @@ test('methodology remains keyboard accessible in collapsed help and privacy avoi
   }finally{p.close();}
   const settings=page('settings');try{const doc=settings.w.document;assert.deepEqual([...doc.querySelectorAll('.privacy-section h3')].map(node=>node.textContent),['Qué se guarda','Dónde está','Qué elimina el borrado']);assert.doesNotMatch(doc.querySelector('main').textContent,/\btracker\b|\bhooks\b|\bbackups\b/i);assert.match(doc.querySelector('main').textContent,/exportaciones y copias de seguridad/);}finally{settings.close();}
 });
+
+test('weekly comparison handles increases, decreases, zero and absent history', () => {
+  const p=page();
+  try {
+    const data=usage();
+    const update=(average,previous)=>p.w.updateUsage({...data,week:{...data.week,averageMinutes:average,previousAverageMinutes:previous}});
+    update(150,100);p.w.document.getElementById('mode-week').click();
+    const comparison=p.w.document.getElementById('week-comparison');
+    assert.equal(comparison.textContent,'↑ 50% más que la semana pasada');
+    update(50,100);assert.equal(comparison.textContent,'↓ 50% menos que la semana pasada');
+    update(0,100);assert.match(comparison.textContent,/100% menos/);
+    update(100,100);assert.match(comparison.textContent,/Sin cambios/);
+    update(100,0);assert.match(comparison.textContent,/no hubo uso registrado/);
+    update(100,null);assert.match(comparison.textContent,/Sin comparación anterior/);
+    p.w.document.getElementById('mode-day').click();assert.equal(comparison.hidden,true);
+  } finally {p.close();}
+});

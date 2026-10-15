@@ -454,6 +454,19 @@
     const state=data.trackingState || 'active';
     document.getElementById('tracking-state').textContent=({manual:'Pausado manualmente',system:'Pausado por bloqueo o suspensión',idle:'Pausado por inactividad',waiting:'Esperando una aplicación',active:'Registrando actividad'})[state];
     document.getElementById('pause-tracking').textContent=state==='manual'?'Reanudar':'Pausar';
+    const comparison=document.getElementById('week-comparison');
+    comparison.hidden=!week;
+    const previous=data.week?.previousAverageMinutes;
+    if(week){
+      if(previous==null || data.week.averageDays===0) comparison.textContent='Sin comparación anterior';
+      else if(previous===0) comparison.textContent=data.week.averageMinutes===0?'Sin cambios respecto de la semana pasada':'La semana pasada no hubo uso registrado';
+      else {
+        const change=(data.week.averageMinutes/previous-1)*100;
+        const percent=Math.round(Math.abs(change));
+        comparison.textContent=percent===0?'Sin cambios respecto de la semana pasada':`${change>0?'↑':'↓'} ${percent}% ${change>0?'más':'menos'} que la semana pasada`;
+      }
+      comparison.title='Comparación del promedio diario registrado con el de la semana anterior. Los días sin medición aportan cero.';
+    }
     const coverageNote=document.getElementById('coverage-note');
     const hasUnmeasuredDay=week && data.week.days.some((day,index)=>day>=data.firstDate && day<=data.today && !data.week.measuredDays?.[index]);
     const coveredDays=week?data.week.days.filter((day,index)=>day>=data.firstDate && day<=data.today && data.week.measuredDays?.[index]).length:0;

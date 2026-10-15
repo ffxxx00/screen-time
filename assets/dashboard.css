@@ -225,3 +225,7 @@ main.dashboard{max-width:none}
 .dashboard .app-name{font-size:clamp(16px,calc(.5vh + 13.6px),18px)}
 .dashboard .date-calendar{padding:clamp(10px,calc(1vh + 5.2px),14px)}
 .dashboard .calendar-day{min-height:clamp(32px,calc(1vh + 27.2px),36px)}
+
+.summary-values{display:flex;justify-content:space-between;align-items:center;gap:16px;width:100%}
+.week-comparison{max-width:155px;font-size:13px;line-height:1.4;color:var(--secondary);font-variant-numeric:tabular-nums}
+@media(max-width:480px){.week-comparison{max-width:130px;font-size:12px}}
