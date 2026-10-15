@@ -43,10 +43,11 @@ use windows_sys::Win32::{
         Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK},
         Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO},
         WindowsAndMessaging::{
-            CallNextHookEx, GetWindowThreadProcessId, SetWindowsHookExW, UnhookWindowsHookEx,
-            EVENT_SYSTEM_FOREGROUND, HC_ACTION, WH_KEYBOARD_LL, WH_MOUSE_LL, WINEVENT_OUTOFCONTEXT,
-            WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_MBUTTONDOWN, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
-            WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_XBUTTONDOWN,
+            CallNextHookEx, GetClassNameW, GetWindowThreadProcessId, SetWindowsHookExW,
+            UnhookWindowsHookEx, EVENT_SYSTEM_FOREGROUND, HC_ACTION, WH_KEYBOARD_LL, WH_MOUSE_LL,
+            WINEVENT_OUTOFCONTEXT, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_MBUTTONDOWN,
+            WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_SYSKEYDOWN,
+            WM_SYSKEYUP, WM_XBUTTONDOWN,
         },
     },
 };
@@ -368,7 +369,15 @@ impl Tracker {
         unsafe {
             GetWindowThreadProcessId(hwnd, &mut pid);
         }
-        let path = icons::process_path(pid);
+        // Explorer owns both file windows and the desktop/taskbar. Only the former is app use.
+        let mut class = [0u16; 128];
+        let length = unsafe { GetClassNameW(hwnd, class.as_mut_ptr(), class.len() as i32) };
+        let class = String::from_utf16_lossy(&class[..length.max(0) as usize]);
+        let path = if is_shell_surface(&class) {
+            None
+        } else {
+            icons::process_path(pid)
+        };
         self.process = path
             .as_ref()
             .and_then(|p| p.file_name())
@@ -789,6 +798,13 @@ fn data_file() -> Result<PathBuf, String> {
     Ok(base.join("HorariosTracker").join("app_usage.csv"))
 }
 
+fn is_shell_surface(class: &str) -> bool {
+    matches!(
+        class,
+        "Progman" | "WorkerW" | "Shell_TrayWnd" | "Shell_SecondaryTrayWnd"
+    )
+}
+
 fn idle_ms() -> u32 {
     let mut info = LASTINPUTINFO {
         cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
@@ -1055,6 +1071,21 @@ mod tests {
         Segment {
             since: start,
             wall_start: Local::now(),
+        }
+    }
+
+    #[test]
+    fn desktop_and_taskbar_are_excluded_but_file_explorer_is_counted() {
+        for class in [
+            "Progman",
+            "WorkerW",
+            "Shell_TrayWnd",
+            "Shell_SecondaryTrayWnd",
+        ] {
+            assert!(is_shell_surface(class));
+        }
+        for class in ["CabinetWClass", "ExploreWClass", "Chrome_WidgetWin_1"] {
+            assert!(!is_shell_surface(class));
         }
     }
 

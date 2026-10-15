@@ -7,7 +7,12 @@ use std::{
 };
 use windows_sys::Win32::{
     Foundation::*,
-    System::{LibraryLoader::GetModuleHandleW, RemoteDesktop::*},
+    System::{
+        LibraryLoader::GetModuleHandleW,
+        Power::*,
+        RemoteDesktop::*,
+        SystemServices::{GUID_LIDSWITCH_STATE_CHANGE, GUID_SESSION_DISPLAY_STATUS},
+    },
     UI::WindowsAndMessaging::*,
 };
 const INPUT: u32 = WM_APP + 10;
@@ -24,6 +29,9 @@ pub fn pause_at() -> Option<Instant> {
 }
 pub fn clear_pause() {
     *PAUSE_AT.lock().unwrap() = None;
+}
+fn same_guid(a: windows_sys::core::GUID, b: windows_sys::core::GUID) -> bool {
+    a.data1 == b.data1 && a.data2 == b.data2 && a.data3 == b.data3 && a.data4 == b.data4
 }
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(Some(0)).collect()
@@ -92,10 +100,12 @@ struct State {
     session: bool,
     suspended: bool,
     ending: bool,
+    lid_closed: bool,
+    display_off: bool,
 }
 impl State {
     fn paused(&self) -> bool {
-        self.session || self.suspended || self.ending
+        self.session || self.suspended || self.ending || self.lid_closed || self.display_off
     }
 
     fn session_event(&mut self, event: u32, blocked: bool) -> bool {
@@ -129,6 +139,14 @@ impl State {
             _ => return false,
         }
         true
+    }
+
+    fn display_event(&mut self, lid: bool, value: u32) {
+        if lid {
+            self.lid_closed = value == 0;
+        } else {
+            self.display_off = value == 0;
+        }
     }
 
     fn input(&mut self, blocked: bool) -> bool {
@@ -217,6 +235,19 @@ unsafe extern "system" fn wndproc(hwnd: HWND, message: u32, w: WPARAM, l: LPARAM
             }
             0
         }
+        WM_POWERBROADCAST if w as u32 == PBT_POWERSETTINGCHANGE && l != 0 => {
+            let setting = &*(l as *const POWERBROADCAST_SETTING);
+            if setting.DataLength == 4 {
+                let guid = setting.PowerSetting;
+                let lid = same_guid(guid, GUID_LIDSWITCH_STATE_CHANGE);
+                if lid || same_guid(guid, GUID_SESSION_DISPLAY_STATUS) {
+                    let value = ptr::read_unaligned(setting.Data.as_ptr().cast::<u32>());
+                    state.display_event(lid, value);
+                    state.notify();
+                }
+            }
+            1
+        }
         WM_POWERBROADCAST => {
             let blocked = if matches!(
                 w as u32,
@@ -297,7 +328,7 @@ impl Monitor {
                 let mut state = Box::new(State {
                     session: session_blocked(),
                     suspended: false,
-                    ending: false,
+                    ..State::default()
                 });
                 let hwnd = CreateWindowExW(
                     0,
@@ -327,12 +358,31 @@ impl Monitor {
                     DestroyWindow(hwnd);
                     return;
                 }
+                let registrations =
+                    [GUID_LIDSWITCH_STATE_CHANGE, GUID_SESSION_DISPLAY_STATUS].map(|guid| {
+                        RegisterPowerSettingNotification(hwnd, &guid, DEVICE_NOTIFY_WINDOW_HANDLE)
+                    });
+                if registrations.iter().any(|handle| *handle == 0) {
+                    for handle in registrations {
+                        if handle != 0 {
+                            UnregisterPowerSettingNotification(handle);
+                        }
+                    }
+                    let _ = ready.send(Err(
+                        "No se pudieron registrar los eventos de tapa y pantalla".into(),
+                    ));
+                    DestroyWindow(hwnd);
+                    return;
+                }
                 let _ = ready.send(Ok(hwnd as usize));
                 state.notify();
                 let mut message: MSG = std::mem::zeroed();
                 while GetMessageW(&mut message, ptr::null_mut(), 0, 0) > 0 {
                     TranslateMessage(&message);
                     DispatchMessageW(&message);
+                }
+                for handle in registrations {
+                    UnregisterPowerSettingNotification(handle);
                 }
             })
             .map_err(|e| e.to_string())?;
@@ -346,6 +396,25 @@ impl Monitor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lid_and_display_pause_independently_of_suspend_and_input() {
+        let mut state = State::default();
+        state.display_event(true, 0);
+        assert!(state.paused());
+        assert!(!state.input(false));
+        state.display_event(false, 0);
+        state.display_event(true, 1);
+        assert!(state.paused());
+        state.display_event(false, 2); // Dimmed still counts as visible.
+        assert!(!state.paused());
+        state.session_event(WTS_SESSION_LOCK, true);
+        state.display_event(true, 0);
+        state.display_event(true, 1);
+        assert!(state.paused());
+        state.session_event(WTS_SESSION_UNLOCK, false);
+        assert!(!state.paused());
+    }
 
     #[test]
     fn checkpoint_interval_is_one_minute_and_ui_timeout_is_independent() {
