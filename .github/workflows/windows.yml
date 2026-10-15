@@ -47,6 +47,12 @@ jobs:
       - name: Package release
         shell: powershell
         run: ./tools/package-release.ps1
+      - name: Build and verify setup executable
+        shell: powershell
+        run: ./tools/build-setup.ps1
+      - name: Test setup executable
+        shell: powershell
+        run: ./tests/setup.test.ps1
       - name: Test release package in a temporary installation
         shell: powershell
         run: ./tests/package.test.ps1

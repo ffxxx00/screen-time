@@ -1,4 +1,4 @@
-function Test-WebView2Runtime {
+﻿function Test-WebView2Runtime {
     param([scriptblock]$ReadVersion = {
         param($registryPath)
         (Get-ItemProperty -Path $registryPath -Name pv -ErrorAction SilentlyContinue).pv
@@ -70,6 +70,21 @@ function Install-AppFiles {
             Remove-Item -LiteralPath $transaction -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
+}
+
+function Restore-AppDataBackup {
+    param([Parameter(Mandatory)][string]$DataDirectory, [Parameter(Mandatory)][string]$BackupDirectory)
+    $root = [IO.Path]::GetFullPath($DataDirectory).TrimEnd('\')
+    $backup = [IO.Path]::GetFullPath($BackupDirectory).TrimEnd('\')
+    if ([IO.Path]::GetDirectoryName($backup) -ne (Join-Path $root 'backups') -or -not [IO.Path]::GetFileName($backup).StartsWith('pre-install-')) { throw 'Ruta de respaldo no válida.' }
+    if (-not (Test-Path -LiteralPath (Join-Path $backup 'app_usage.csv') -PathType Leaf)) { throw 'El respaldo no contiene el historial anterior.' }
+    # Keep any writes made by the failed new version before restoring older data.
+    $failed = Join-Path $backup ('failed-update-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $failed | Out-Null
+    $current = @(Get-ChildItem -LiteralPath $root -File -Filter 'app_usage.*')
+    foreach ($file in $current) { Copy-Item -LiteralPath $file.FullName -Destination $failed }
+    foreach ($file in $current) { Remove-Item -LiteralPath $file.FullName }
+    Get-ChildItem -LiteralPath $backup -File -Filter 'app_usage.*' | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $root }
 }
 
 function Remove-OldAppBackups {

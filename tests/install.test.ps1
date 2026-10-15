@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '..\tools\install-core.ps1')
 if (Test-WebView2Runtime -ReadVersion { param($path) $null }) { throw 'WebView2 missing runtime was accepted' }
 if (Test-WebView2Runtime -ReadVersion { param($path) '0.0.0.0' }) { throw 'WebView2 zero version was accepted' }
@@ -34,6 +34,19 @@ try {
         New-Item -ItemType Directory -Path $folder -Force | Out-Null
         [IO.File]::WriteAllText((Join-Path $folder 'app_usage.csv'),'history')
     }
+    $restore = Join-Path $data 'backups\pre-install-20261015-090000'
+    New-Item -ItemType Directory -Path $restore -Force | Out-Null
+    [IO.File]::WriteAllText((Join-Path $restore 'app_usage.csv'),'legacy data')
+    [IO.File]::WriteAllText((Join-Path $restore 'app_usage.settings.json'),'old settings')
+    [IO.File]::WriteAllText((Join-Path $data 'app_usage.csv'),'new UTC data')
+    [IO.File]::WriteAllText((Join-Path $data 'app_usage.daily.json'),'new index')
+    Restore-AppDataBackup -DataDirectory $data -BackupDirectory $restore
+    if ([IO.File]::ReadAllText((Join-Path $data 'app_usage.csv')) -ne 'legacy data' -or (Test-Path -LiteralPath (Join-Path $data 'app_usage.daily.json'))) { throw 'Data rollback failed' }
+    $failedCopies = @(Get-ChildItem -LiteralPath $restore -Directory -Filter 'failed-update-*')
+    if ($failedCopies.Count -ne 1 -or [IO.File]::ReadAllText((Join-Path $failedCopies[0].FullName 'app_usage.csv')) -ne 'new UTC data') { throw 'Failed update data was not preserved' }
+    $badBackup = $false
+    try { Restore-AppDataBackup -DataDirectory $data -BackupDirectory $root } catch { $badBackup = $true }
+    if (-not $badBackup) { throw 'Unsafe backup path was accepted' }
     $unrelated = Join-Path $data 'backups\my-backup'
     New-Item -ItemType Directory -Path $unrelated -Force | Out-Null
     Remove-OldAppBackups $data $installed

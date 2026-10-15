@@ -1,4 +1,4 @@
-param([string]$SourceDirectory)
+﻿param([string]$SourceDirectory)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'install-core.ps1')
 $projectRoot = Split-Path $PSScriptRoot
@@ -81,6 +81,7 @@ $linkPaths = @((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Screen Time
 $linkBackups = @{}
 foreach ($link in $linkPaths) { $linkBackups[$link] = if (Test-Path -LiteralPath $link) { [IO.File]::ReadAllBytes($link) } else { $null } }
 $oldStartup = (Get-ItemProperty -Path $runKey -Name HorariosTracker -ErrorAction SilentlyContinue).HorariosTracker
+$backup = $null
 try {
  Copy-Item -LiteralPath $sourceExe -Destination (Join-Path $payload 'screen-time.exe')
  foreach ($name in @('README.md','LICENSE','PRIVACY.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $payload }
@@ -143,6 +144,7 @@ if (Test-Path -LiteralPath $dataRoot) {
    }
   }
  } elseif (Test-Path $uninstallKey) { Remove-Item -Path $uninstallKey -Force }
+ if ($backup) { Restore-AppDataBackup -DataDirectory $dataRoot -BackupDirectory $backup }
  if ($restartExe -and (Test-Path -LiteralPath $restartExe)) { try { Start-CheckedTracker -Executable $restartExe -Directory (Split-Path $restartExe) | Out-Null } catch { Write-Warning "No se pudo reiniciar la versión anterior: $_" } }
  throw
 } finally {
