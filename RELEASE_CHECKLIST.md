@@ -1,8 +1,19 @@
-# Preparación de una versión personal estable
+# Preparación de la primera release pública
+
+La versión preparada es **0.3.0**. Los comandos y archivos que se adjuntan están en [docs/PUBLICAR.md](docs/PUBLICAR.md).
+
+- [ ] Revisar archivos rastreados e historial Git antes de hacer público el repositorio.
+- [ ] Compilar el commit definitivo y ejecutar las pruebas de Rust, dashboard, instalador, desinstalador, ZIP y setup.
+- [ ] Comprobar instalación en Windows limpio y documentar los resultados pendientes.
+- [ ] Revisar licencias directas y transitivas.
+- [ ] Adjuntar EXE, ZIP y ambos SHA-256 a un borrador de release `v0.3.0`.
+- [ ] Verificar las descargas finales y publicar con requisitos, ausencia de firma y limitaciones explícitos.
+
+Las secciones siguientes conservan el inventario y la evidencia previa; no sustituyen estos controles sobre el artefacto final.
 
 ## Incorporado
 
-- Instalación por usuario en `%LOCALAPPDATA%\Programs\Screen Time`, arranque comprobado con reversión, retirada del ejecutable y accesos directos anteriores, autoarranque conservado, respaldo local previo a la actualización y desinstalación registrada en Windows.
+- Instalación por usuario en `%LOCALAPPDATA%\Programs\Screen Time`, arranque comprobado con reversión, autoarranque conservado, respaldo local previo a la actualización y desinstalación registrada en Windows.
 - Checkpoints de 60 segundos, guardado inmediato en cambios de estado, journal recuperable, sincronización del CSV, reintento de escrituras y preferencias atómicas.
 - Índice diario incremental para filas propias, verificación de cambios externos y medición local del daemon en bandeja; ver `docs/VALIDACION.md`.
 - Notificaciones de bloqueo, desconexión de sesión, suspensión, reanudación y fin de sesión pausan el conteo independientemente del ajuste de inactividad.

@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$ArchivePath
 )
 $ErrorActionPreference = 'Stop'
@@ -24,6 +24,8 @@ $installed = Join-Path $root 'Programs\Screen Time'
 New-Item -ItemType Directory -Path $extracted,$payload -Force | Out-Null
 try {
     Expand-Archive -LiteralPath $archive -DestinationPath $extracted
+    $unexpectedDocs = @(Get-ChildItem -LiteralPath (Join-Path $extracted 'docs') -Recurse -File | Where-Object { $_.Name -notin @('ARQUITECTURA.md','VALIDACION.md','DEPENDENCIAS.md','PUBLICAR.md') })
+    if ($unexpectedDocs.Count) { throw 'El paquete contiene documentación o capturas fuera de la lista de distribución.' }
     foreach ($name in @('screen-time.exe','README.md','LICENSE','PRIVACY.md','CHARTJS-LICENSE.txt','Instalar.cmd')) {
         if (-not (Test-Path -LiteralPath (Join-Path $extracted $name) -PathType Leaf)) { throw "Falta en ZIP: $name" }
     }
@@ -47,7 +49,7 @@ try {
     $installedHash = (Get-FileHash -LiteralPath (Join-Path $installed 'screen-time.exe') -Algorithm SHA256).Hash
     $packageHash = (Get-FileHash -LiteralPath (Join-Path $extracted 'screen-time.exe') -Algorithm SHA256).Hash
     if ($installedHash -ne $packageHash) { throw 'El ejecutable instalado no coincide con el del ZIP.' }
-    if (Test-Path -LiteralPath (Join-Path $root 'HorariosTracker')) { throw 'La instalación de prueba tocó una carpeta de datos.' }
+    if (Test-Path -LiteralPath (Join-Path $root 'Screen Time')) { throw 'La instalación de prueba tocó una carpeta de datos.' }
     Write-Output 'ZIP: checksum, contenido, instalador y copia temporal aprobados.'
 } finally {
     $resolved = [IO.Path]::GetFullPath($root)

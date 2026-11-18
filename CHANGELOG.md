@@ -2,7 +2,11 @@
 
 Los cambios notables de este proyecto se documentan aquí. El historial anterior a esta documentación no fue reconstruido a partir de commits publicados.
 
-## 0.3.0 — En desarrollo
+## 0.3.0 — En preparación para la primera release pública
+
+- Nombre Screen Time unificado en datos locales, Registro e identificadores internos; sin migraciones de nombres anteriores.
+- README orientado a instalación y uso, guía de publicación actualizada y paquete sin capturas de auditorías.
+- Reconocimiento de aplicaciones alojadas y ejecutables trasladados, con agrupación de versiones y nombres desde metadatos locales.
 
 - Instalador gráfico EXE por usuario con verificación del paquete, progreso, actualización y recuperación de archivos y datos.
 - Registros nuevos con instante UTC, microsegundos y desfase de hora local; lectura compatible del historial antiguo sin reescritura.

@@ -3,14 +3,17 @@
 #[cfg(not(target_os = "windows"))]
 compile_error!("Screen Time está diseñado únicamente para Windows 10/11.");
 
+mod app_identity;
 mod coverage;
 mod daily_summary;
 mod data_management;
 mod diagnostics;
 mod durability;
+mod grouping;
 mod history;
 mod icons;
 mod lifecycle;
+mod native_identity;
 #[cfg(test)]
 mod test_support;
 
@@ -28,9 +31,10 @@ use std::{
     time::{Duration, Instant},
 };
 use tao::{
-    dpi::LogicalSize,
+    dpi::{LogicalSize, PhysicalPosition},
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoopBuilder, EventLoopProxy},
+    platform::windows::WindowExtWindows,
     window::{Window, WindowBuilder, WindowId},
 };
 use tray_icon::{
@@ -73,6 +77,12 @@ fn trim_background_memory() {
 
 #[derive(Debug)]
 enum AppEvent {
+    ApplicationResolved {
+        generation: u64,
+        hwnd: usize,
+        path: PathBuf,
+        result: app_identity::Resolved,
+    },
     Foreground(usize),
     Input,
     IdleDeadline,
@@ -97,6 +107,7 @@ enum AppEvent {
     OpenDataFolder,
     ExportHistory,
     ClearHistory,
+    SaveIconColors(serde_json::Value),
     SetIdlePause(bool),
     SetDarkMode(bool),
     SetAutostart(bool),
@@ -120,6 +131,7 @@ struct Dashboard {
     icons_enabled: bool,
     ready: bool,
     opened_at: Instant,
+    geometry_dirty_at: Option<Instant>,
 }
 
 fn close_dashboard(dashboard: &mut Option<Dashboard>) {
@@ -128,7 +140,7 @@ fn close_dashboard(dashboard: &mut Option<Dashboard>) {
         if let Err(error) = save_preference(
             &current.settings_path,
             current.settings_key,
-            serde_json::json!({"width":current.geometry.width,"height":current.geometry.height,"maximized":current.geometry.maximized}),
+            current.geometry.to_json(),
         ) {
             show_message(&error);
         }
@@ -145,6 +157,7 @@ struct WindowGeometry {
     width: f64,
     height: f64,
     maximized: bool,
+    position: Option<(i32, i32)>,
 }
 impl WindowGeometry {
     fn load(path: &Path, key: &str, width: f64, height: f64) -> Self {
@@ -162,6 +175,10 @@ impl WindowGeometry {
             width: dimension("width", width),
             height: dimension("height", height),
             maximized: data[key]["maximized"].as_bool().unwrap_or(false),
+            position: data[key]["x"]
+                .as_i64()
+                .zip(data[key]["y"].as_i64())
+                .and_then(|(x, y)| Some((i32::try_from(x).ok()?, i32::try_from(y).ok()?))),
         }
     }
     fn capture(&mut self, window: &Window) {
@@ -170,6 +187,9 @@ impl WindowGeometry {
         }
         self.maximized = window.is_maximized();
         if !self.maximized {
+            if let Ok(position) = window.outer_position() {
+                self.position = Some((position.x, position.y));
+            }
             let size = window.inner_size().to_logical::<f64>(window.scale_factor());
             if size.width > 0.0 && size.height > 0.0 {
                 self.width = size.width;
@@ -177,6 +197,84 @@ impl WindowGeometry {
             }
         }
     }
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({"width": self.width, "height": self.height, "maximized": self.maximized, "x": self.position.map(|p| p.0), "y": self.position.map(|p| p.1)})
+    }
+    fn restore(&self, window: &Window) {
+        if let Some((x, y)) = self.position {
+            window.set_outer_position(PhysicalPosition::new(x, y));
+        }
+        fit_window_to_work_area(window, self.position.is_none());
+        if self.maximized {
+            window.set_maximized(true);
+        }
+    }
+}
+
+// Windows may place a newly created window partly outside the monitor work area,
+// especially when a saved size was recorded on a larger display.
+fn fit_window_to_work_area(window: &Window, center: bool) {
+    use windows_sys::Win32::{
+        Foundation::RECT,
+        Graphics::Gdi::{
+            GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+        },
+        UI::WindowsAndMessaging::{GetWindowRect, SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER},
+    };
+    if window.is_maximized() || window.is_minimized() {
+        return;
+    }
+    unsafe {
+        let hwnd = window.hwnd() as HWND;
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        let mut info: MONITORINFO = std::mem::zeroed();
+        info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        let mut rect: RECT = std::mem::zeroed();
+        if monitor.is_null()
+            || GetMonitorInfoW(monitor, &mut info) == 0
+            || GetWindowRect(hwnd, &mut rect) == 0
+        {
+            return;
+        }
+        let work = info.rcWork;
+        if let Some((x, y, width, height)) = fit_rect(rect, work, center) {
+            SetWindowPos(
+                hwnd,
+                ptr::null_mut(),
+                x,
+                y,
+                width,
+                height,
+                SWP_NOACTIVATE | SWP_NOZORDER,
+            );
+        }
+    }
+}
+
+fn fit_rect(
+    rect: windows_sys::Win32::Foundation::RECT,
+    work: windows_sys::Win32::Foundation::RECT,
+    center: bool,
+) -> Option<(i32, i32, i32, i32)> {
+    let width = (rect.right - rect.left).min(work.right - work.left);
+    let height = (rect.bottom - rect.top).min(work.bottom - work.top);
+    if width <= 0 || height <= 0 {
+        return None;
+    }
+    Some((
+        if center {
+            work.left + (work.right - work.left - width) / 2
+        } else {
+            rect.left.clamp(work.left, work.right - width)
+        },
+        if center {
+            work.top + (work.bottom - work.top - height) / 2
+        } else {
+            rect.top.clamp(work.top, work.bottom - height)
+        },
+        width,
+        height,
+    ))
 }
 
 fn save_preference(path: &Path, key: &str, value: serde_json::Value) -> Result<(), String> {
@@ -198,7 +296,7 @@ fn startup_entry(enabled: Option<bool>) -> Result<bool, String> {
     use windows_sys::Win32::System::Registry::*;
     let wide = |text: &str| text.encode_utf16().chain(Some(0)).collect::<Vec<u16>>();
     let key = wide("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
-    let name = wide("HorariosTracker");
+    let name = wide("Screen Time");
     let result = unsafe {
         match enabled {
             Some(true) => {
@@ -246,7 +344,7 @@ struct SingleInstance(HANDLE);
 
 impl SingleInstance {
     fn acquire() -> Result<Self, String> {
-        let name: Vec<u16> = "Local\\HorariosTracker.Daemon\0".encode_utf16().collect();
+        let name: Vec<u16> = "Local\\Screen Time.Daemon\0".encode_utf16().collect();
         let handle = unsafe { CreateMutexW(ptr::null(), 0, name.as_ptr()) };
         if handle.is_null() {
             return Err("No se pudo crear el mutex de instancia única.".into());
@@ -280,6 +378,9 @@ struct Tracker {
     pause_when_idle: bool,
     dark_mode: bool,
     process_paths: BTreeMap<String, PathBuf>,
+    applications: BTreeMap<String, app_identity::Metadata>,
+    identity_generation: u64,
+    grouping: grouping::Grouping,
     journal: durability::Journal,
     pending_rows: VecDeque<Vec<u8>>,
     system_paused: bool,
@@ -325,6 +426,9 @@ impl Tracker {
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
             .unwrap_or_default();
         let journal = durability::Journal::open(&csv_path)?;
+        let applications = app_identity::load_catalog(&csv_path);
+        let mut grouping = grouping::Grouping::load(&csv_path);
+        grouping.catalog(&applications);
         let coverage = coverage::Coverage::load(&csv_path).unwrap_or_else(|error| {
             diagnostics::record(&format!("coverage_load_error: {error}"));
             coverage::Coverage::unavailable(&csv_path)
@@ -339,6 +443,9 @@ impl Tracker {
             coverage,
             csv_path,
             process_paths,
+            applications,
+            identity_generation: 0,
+            grouping,
             process: None,
             segment: None,
             foreground_hwnd: ptr::null_mut(),
@@ -379,7 +486,17 @@ impl Tracker {
         } else {
             icons::process_path(pid)
         };
+        let cached_identity = path.as_ref().and_then(|path| {
+            app_identity::cached(hwnd as usize, pid).map(|result| (path.clone(), result))
+        });
+        self.identity_generation = self.identity_generation.wrapping_add(1);
+        if let Some(path) = &path {
+            app_identity::request(hwnd as usize, pid, path, self.identity_generation);
+        }
         self.process = path.as_deref().map(history::identity);
+        if let Some(path) = &path {
+            self.grouping.observe(&history::identity(path), path);
+        }
         if let (Some(name), Some(path)) = (&self.process, path) {
             let key = name.to_lowercase();
             if self.process_paths.get(&key) != Some(&path) {
@@ -397,6 +514,57 @@ impl Tracker {
         } else {
             None
         };
+        if let Some((path, result)) = cached_identity {
+            self.application_resolved(self.identity_generation, hwnd as usize, path, result);
+        }
+    }
+
+    fn application_resolved(
+        &mut self,
+        generation: u64,
+        hwnd: usize,
+        path: PathBuf,
+        mut result: app_identity::Resolved,
+    ) {
+        if generation != self.identity_generation
+            || hwnd != self.foreground_hwnd as usize
+            || self.manual_paused
+        {
+            return;
+        }
+        native_identity::reconcile(&mut result, &self.applications);
+        if result.id == history::identity(&path)
+            && result.metadata.name == history::executable_name(&result.id)
+        {
+            return;
+        }
+        if self.process.as_deref() == Some(history::identity(&path).as_str()) {
+            self.process = Some(result.id.clone());
+        }
+        self.grouping.observe(&result.id, &path);
+        let key = result.id.to_lowercase();
+        if self.process_paths.get(&key) != Some(&path) {
+            self.process_paths.insert(key, path);
+            self.save_process_paths();
+        }
+        let mut metadata = result.metadata;
+        if metadata.icon.is_none() {
+            metadata.icon = self
+                .applications
+                .get(&result.id)
+                .and_then(|old| old.icon.clone());
+        }
+        if self.applications.get(&result.id) != Some(&metadata) {
+            self.applications.insert(result.id, metadata);
+            self.grouping.catalog(&self.applications);
+            if let Ok(bytes) = serde_json::to_vec(&self.applications) {
+                if let Err(error) =
+                    durability::atomic_write(&self.csv_path.with_extension("apps.json"), &bytes)
+                {
+                    diagnostics::record(&format!("application_metadata_save_error: {error}"));
+                }
+            }
+        }
     }
 
     fn save_process_paths(&self) {
@@ -546,6 +714,9 @@ impl Tracker {
         self.daily_summary = None;
         self.coverage = coverage::Coverage::load(&self.csv_path)?;
         self.process_paths.clear();
+        self.applications.clear();
+        self.grouping = grouping::Grouping::default();
+        self.identity_generation = self.identity_generation.wrapping_add(1);
         self.process = None;
         self.journal = durability::Journal::open(&self.csv_path)?;
         Ok(())
@@ -565,11 +736,14 @@ impl Tracker {
             let seconds = end.saturating_duration_since(segment.since).as_secs_f64();
             if seconds > 0.0 {
                 let path = self.process_paths.get(&process.to_lowercase());
-                self.pending_rows.push_back(history::encode(
+                self.pending_rows.push_back(history::encode_named(
                     &segment.wall_start,
                     process,
                     path.map(PathBuf::as_path),
                     seconds,
+                    self.applications
+                        .get(process)
+                        .map(|metadata| metadata.name.as_str()),
                 ));
             }
         }
@@ -677,6 +851,7 @@ impl Tracker {
                 end.saturating_duration_since(segment.since).as_secs_f64(),
             );
         }
+        let usage = self.grouping.group(usage);
         let week_start = date
             .checked_sub_days(Days::new(date.weekday().num_days_from_monday() as u64))
             .unwrap();
@@ -706,7 +881,7 @@ impl Tracker {
                         end.saturating_duration_since(segment.since).as_secs_f64(),
                     );
                 }
-                day_usage
+                self.grouping.group(day_usage)
             };
             measured_days[index] = self.coverage.contains(day) || !day_usage.is_empty();
             for (name, hours) in day_usage {
@@ -754,11 +929,21 @@ impl Tracker {
             .sum();
         let mut rows: Vec<_> = usage.into_iter().collect();
         rows.sort_by(|a, b| b.1.iter().sum::<f64>().total_cmp(&a.1.iter().sum::<f64>()));
-        let applications = history::applications(
+        let mut applications = history::applications(
             rows.iter()
                 .map(|row| row.0.as_str())
                 .chain(week_rows.iter().map(|row| row.0.as_str())),
         );
+        if let Some(values) = applications.as_object_mut() {
+            for (id, metadata) in self.grouping.presentation(&self.applications) {
+                if let Some(value) = values.get_mut(&id) {
+                    value["name"] = metadata.name.into();
+                    if !metadata.name.to_ascii_lowercase().ends_with(".exe") {
+                        value["displayName"] = metadata.name.into();
+                    }
+                }
+            }
+        }
         Ok(serde_json::json!({
             "applications": applications,
             "labels": rows.iter().map(|row| &row.0).collect::<Vec<_>>(),
@@ -825,7 +1010,7 @@ fn data_file() -> Result<PathBuf, String> {
                 .and_then(|p| p.parent().map(Path::to_path_buf))
         })
         .ok_or_else(|| "No se pudo determinar el directorio local de datos.".to_string())?;
-    Ok(base.join("HorariosTracker").join("app_usage.csv"))
+    Ok(base.join("Screen Time").join("app_usage.csv"))
 }
 
 fn is_shell_surface(class: &str) -> bool {
@@ -995,6 +1180,28 @@ fn handle_ipc(body: &str) {
         _ => serde_json::from_str::<serde_json::Value>(body)
             .ok()
             .and_then(|message| match message.get("command")?.as_str()? {
+                "save-icon-colors" => {
+                    let colors = message.get("colors")?.as_array()?;
+                    if colors.len() > 512
+                        || !colors.iter().all(|entry| {
+                            let Some(pair) = entry.as_array() else {
+                                return false;
+                            };
+                            pair.len() == 2
+                                && pair[0].as_str().is_some_and(|name| name.len() <= 32768)
+                                && pair[1].as_str().is_some_and(|color| {
+                                    color.len() == 7
+                                        && color.starts_with('#')
+                                        && color[1..].bytes().all(|c| c.is_ascii_hexdigit())
+                                })
+                        })
+                    {
+                        return None;
+                    }
+                    Some(AppEvent::SaveIconColors(serde_json::Value::Array(
+                        colors.clone(),
+                    )))
+                }
                 "set-idle-pause" => {
                     Some(AppEvent::SetIdlePause(message.get("enabled")?.as_bool()?))
                 }
@@ -1072,6 +1279,60 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn window_geometry_roundtrips_and_accepts_older_preferences() {
+        let fixture = super::test_support::Fixture::new("");
+        let path = fixture.root.join("settings.json");
+        let old = super::WindowGeometry::load(&path, "dashboard_window", 780.0, 820.0);
+        assert_eq!(old.position, None);
+        let geometry = super::WindowGeometry {
+            width: 700.0,
+            height: 600.0,
+            maximized: true,
+            position: Some((-1300, 42)),
+        };
+        super::save_preference(&path, "dashboard_window", geometry.to_json()).unwrap();
+        let loaded = super::WindowGeometry::load(&path, "dashboard_window", 780.0, 820.0);
+        assert_eq!(loaded.position, Some((-1300, 42)));
+        assert_eq!(
+            (loaded.width, loaded.height, loaded.maximized),
+            (700.0, 600.0, true)
+        );
+    }
+    #[test]
+    fn window_fits_work_area_including_negative_monitor_coordinates() {
+        use windows_sys::Win32::Foundation::RECT;
+        let work = RECT {
+            left: -1920,
+            top: 0,
+            right: 0,
+            bottom: 1040,
+        };
+        let rect = RECT {
+            left: -500,
+            top: 300,
+            right: 300,
+            bottom: 1200,
+        };
+        assert_eq!(
+            super::fit_rect(rect, work, false),
+            Some((-800, 140, 800, 900))
+        );
+        assert_eq!(
+            super::fit_rect(rect, work, true),
+            Some((-1360, 70, 800, 900))
+        );
+        let oversized = RECT {
+            left: -2000,
+            top: -50,
+            right: 1000,
+            bottom: 1500,
+        };
+        assert_eq!(
+            super::fit_rect(oversized, work, true),
+            Some((-1920, 0, 1920, 1040))
+        );
+    }
     use super::*;
 
     struct TestFile(PathBuf);
@@ -1095,6 +1356,231 @@ mod tests {
             since: start,
             wall_start: Local::now(),
         }
+    }
+
+    #[test]
+    fn snapshot_unifies_legacy_path_and_profile_for_day_and_week() {
+        use chrono::TimeZone;
+        let fixture = test_support::Fixture::new("");
+        let date = Local::now().date_naive();
+        let start = Local
+            .from_local_datetime(&date.and_hms_opt(10, 0, 0).unwrap())
+            .single()
+            .unwrap();
+        let path = Path::new(r"C:\Apps\browser.exe");
+        let mut bytes = format!("{} 10:00:00,Browser.exe,60\n", date).into_bytes();
+        bytes.extend(history::encode(
+            &start,
+            &history::identity(path),
+            Some(path),
+            120.0,
+        ));
+        bytes.extend(history::encode_named(
+            &start,
+            "app:windows:Browser.Profile1",
+            Some(path),
+            180.0,
+            Some("Personal profile"),
+        ));
+        fs::write(&fixture.csv, &bytes).unwrap();
+        let mut tracker = Tracker::new(fixture.csv.clone()).unwrap();
+        let snapshot = tracker.snapshot(date).unwrap();
+        assert_eq!(snapshot["labels"].as_array().unwrap().len(), 1);
+        assert_eq!(snapshot["minutes"][0], 6.0);
+        assert_eq!(snapshot["hourly"][0][10], 6.0);
+        assert_eq!(snapshot["week"]["labels"].as_array().unwrap().len(), 1);
+        assert_eq!(snapshot["week"]["minutes"][0], 6.0);
+        assert_eq!(snapshot["week"]["totalMinutes"], 6.0);
+        assert_eq!(fs::read(&fixture.csv).unwrap(), bytes);
+        assert_eq!(
+            snapshot["applications"][history::identity(path)]["name"],
+            "browser.exe"
+        );
+    }
+    #[test]
+    fn updates_and_java_names_are_repaired_in_day_week_and_rebuilt_index() {
+        use chrono::TimeZone;
+        let fixture = test_support::Fixture::new("");
+        let date = Local::now().date_naive();
+        let start = Local
+            .from_local_datetime(&date.and_hms_opt(10, 0, 0).unwrap())
+            .single()
+            .unwrap();
+        let rows = [
+            (
+                "app:native:one",
+                r"C:\Program Files\WindowsApps\Example.Chat_1.2.3.0_x64__publisher\app\chat.exe",
+                "chat.exe",
+            ),
+            (
+                "app:native:two",
+                r"C:\Program Files\WindowsApps\Example.Chat_2.0.0.0_x64__publisher\app\chat.exe",
+                "chat.exe",
+            ),
+            (
+                "app:native:three",
+                r"C:\Local\Discord\app-1.0.1\Discord.exe",
+                "discord.exe",
+            ),
+            (
+                "app:native:four",
+                r"C:\Local\Discord\app-1.0.2\Discord.exe",
+                "discord.exe",
+            ),
+            (
+                "app:java:class:org.example.PaintStudio",
+                r"C:\Java\javaw.exe",
+                "org.example.PaintStudio",
+            ),
+            (
+                "app:java:manifest:[\"\",\"\",\"org.example.ChartStudio\"]",
+                r"C:\Java\javaw.exe",
+                "org.example.ChartStudio",
+            ),
+        ];
+        let mut bytes = Vec::new();
+        for (id, path, name) in rows {
+            bytes.extend(history::encode_named(
+                &start,
+                id,
+                Some(Path::new(path)),
+                60.0,
+                Some(name),
+            ));
+        }
+        fs::write(&fixture.csv, &bytes).unwrap();
+        for rebuild in [false, true] {
+            if rebuild {
+                fs::remove_file(fixture.csv.with_extension("daily.json")).unwrap();
+            }
+            let mut tracker = Tracker::new(fixture.csv.clone()).unwrap();
+            let snapshot = tracker.snapshot(date).unwrap();
+            assert_eq!(snapshot["labels"].as_array().unwrap().len(), 4);
+            assert_eq!(snapshot["week"]["labels"].as_array().unwrap().len(), 4);
+            assert_eq!(snapshot["minutes"][0], 2.0);
+            assert_eq!(snapshot["minutes"][1], 2.0);
+            assert_eq!(snapshot["week"]["totalMinutes"], 6.0);
+            assert_eq!(
+                snapshot["applications"][rows[4].0]["displayName"],
+                "Paint Studio"
+            );
+            assert_eq!(
+                snapshot["applications"][rows[5].0]["displayName"],
+                "Chart Studio"
+            );
+            assert_eq!(fs::read(&fixture.csv).unwrap(), bytes);
+        }
+    }
+    #[test]
+    fn native_identity_survives_move_update_restart_and_groups_history() {
+        use chrono::TimeZone;
+        let fixture = test_support::Fixture::new("");
+        let date = Local::now().date_naive();
+        let start = Local
+            .from_local_datetime(&date.and_hms_opt(10, 0, 0).unwrap())
+            .single()
+            .unwrap();
+        let old = fixture.root.join("program.exe");
+        let moved = fixture.root.join("moved.exe");
+        fs::write(&old, b"synthetic executable version one").unwrap();
+        let bytes = history::encode(&start, &history::identity(&old), Some(&old), 60.0);
+        fs::write(&fixture.csv, &bytes).unwrap();
+        let mut tracker = Tracker::new(fixture.csv.clone()).unwrap();
+        let resolve = |tracker: &mut Tracker, path: &Path| {
+            let (id, evidence) = native_identity::identify(path).unwrap();
+            tracker.process = Some(history::identity(path));
+            tracker.application_resolved(
+                0,
+                0,
+                path.into(),
+                app_identity::Resolved {
+                    id,
+                    metadata: app_identity::Metadata {
+                        name: "Program".into(),
+                        icon: None,
+                        native: Some(evidence),
+                    },
+                },
+            );
+            tracker.process.clone().unwrap()
+        };
+        let id = resolve(&mut tracker, &old);
+        fs::rename(&old, &moved).unwrap();
+        let mut tracker = Tracker::new(fixture.csv.clone()).unwrap();
+        assert_eq!(resolve(&mut tracker, &moved), id);
+        fs::write(&moved, b"synthetic updated version two, different content").unwrap();
+        assert_eq!(resolve(&mut tracker, &moved), id);
+        let mut combined = bytes;
+        combined.extend(history::encode_named(
+            &start,
+            &id,
+            Some(&moved),
+            120.0,
+            Some("Program"),
+        ));
+        fs::write(&fixture.csv, &combined).unwrap();
+        let mut rebuilt = Tracker::new(fixture.csv.clone()).unwrap();
+        let snapshot = rebuilt.snapshot(date).unwrap();
+        assert_eq!(snapshot["labels"], serde_json::json!([id]));
+        assert_eq!(snapshot["minutes"][0], 3.0);
+        assert_eq!(snapshot["week"]["minutes"][0], 3.0);
+        assert_eq!(
+            rebuilt.applications[&id]
+                .native
+                .as_ref()
+                .unwrap()
+                .fingerprints
+                .len(),
+            2
+        );
+        assert_eq!(fs::read(&fixture.csv).unwrap(), combined);
+        rebuilt.clear_history().unwrap();
+        assert!(rebuilt.applications.is_empty());
+        assert!(!fixture.csv.with_extension("apps.json").exists());
+    }
+
+    #[test]
+    fn resolved_application_preserves_segment_and_rejects_stale_results() {
+        let fixture = test_support::Fixture::new("");
+        let mut tracker = Tracker::new(fixture.csv.clone()).unwrap();
+        let path = PathBuf::from(r"C:\Java17\javaw.exe");
+        tracker.process = Some(history::identity(&path));
+        tracker.identity_generation = 2;
+        let start = Instant::now();
+        tracker.segment = Some(segment(start));
+        let result = app_identity::Resolved {
+            id: "app:java:class:org.example.Editor".into(),
+            metadata: app_identity::Metadata {
+                name: "Example Editor".into(),
+                icon: None,
+                native: None,
+            },
+        };
+        tracker.application_resolved(1, 0, path.clone(), result.clone());
+        assert_eq!(
+            tracker.process.as_deref(),
+            Some(history::identity(&path).as_str())
+        );
+        tracker.application_resolved(2, 0, path, result.clone());
+        assert_eq!(tracker.process.as_deref(), Some(result.id.as_str()));
+        tracker.flush_until(start + Duration::from_millis(750));
+        let rows = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .flexible(true)
+            .from_path(&fixture.csv)
+            .unwrap()
+            .records()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(history::parse(&rows[0]).unwrap().seconds, 0.75);
+        assert_eq!(&rows[0][6], "Example Editor");
+        let rebuilt = Tracker::new(fixture.csv.clone()).unwrap();
+        assert_eq!(rebuilt.applications[&result.id].name, "Example Editor");
+        tracker.clear_history().unwrap();
+        tracker.application_resolved(2, 0, PathBuf::from("ignored"), result);
+        assert!(tracker.applications.is_empty());
+        assert!(!fixture.csv.with_extension("apps.json").exists());
     }
 
     #[test]
@@ -1524,6 +2010,7 @@ fn run() -> Result<(), String> {
         .set(proxy.clone())
         .map_err(|_| "No se pudo inicializar el canal de eventos.".to_string())?;
 
+    app_identity::start(proxy.clone());
     let hook = unsafe {
         SetWinEventHook(
             EVENT_SYSTEM_FOREGROUND,
@@ -1665,7 +2152,7 @@ fn run() -> Result<(), String> {
             }
             Event::UserEvent(AppEvent::OpenDashboard) => {
                 if dashboard.is_some() {
-                    if let Some(current) = dashboard.as_ref().filter(|current| current.ready) { current.window.set_minimized(false); current.window.set_visible(true); current.window.set_focus(); }
+                    if let Some(current) = dashboard.as_ref().filter(|current| current.ready) { current.window.set_minimized(false); fit_window_to_work_area(&current.window, false); current.window.set_visible(true); current.window.set_focus(); }
                 } else {
                     tracker.checkpoint();
                     let html = dashboard_html(tracker.dark_mode);
@@ -1674,15 +2161,20 @@ fn run() -> Result<(), String> {
                                 let settings_path = csv_path.with_extension("settings.json");
                                 let geometry = WindowGeometry::load(&settings_path, "dashboard_window", 780.0, 820.0);
                                 let window = WindowBuilder::new().with_visible(false).with_window_icon(Some(window_icon())).with_title("Screen Time")
-                                    .with_inner_size(LogicalSize::new(geometry.width, geometry.height)).with_maximized(geometry.maximized)
+                                    .with_inner_size(LogicalSize::new(geometry.width, geometry.height))
                                     .with_min_inner_size(LogicalSize::new(360.0, 480.0)).build(target)
                                     .map_err(|e| format!("No se pudo crear el dashboard: {e}"))?;
+                                geometry.restore(&window);
+                                let saved_colors = fs::read(&settings_path).ok()
+                                    .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+                                    .and_then(|settings| settings.get("icon_colors").cloned()).unwrap_or_else(|| serde_json::json!([]));
                                 let webview = wry::WebViewBuilder::new().with_html(html)
+                                    .with_initialization_script(&format!("window.savedIconColors={saved_colors};"))
                                     .with_ipc_handler(|request| handle_ipc(request.body()))
                                     .build(&window)
                                     .map_err(|e| format!("No se pudo inicializar WebView2: {e}"))?;
                                 let id = window.id();
-                                Ok(Dashboard { webview, window, id, geometry, settings_path, settings_key: "dashboard_window", icon_cache: BTreeMap::new(), unresolved_icons: Default::default(), icons_loading: false, icon_generation: 0, icons_enabled: false, ready: false, opened_at: Instant::now() })
+                                Ok(Dashboard { webview, window, id, geometry, settings_path, settings_key: "dashboard_window", icon_cache: BTreeMap::new(), unresolved_icons: Default::default(), icons_loading: false, icon_generation: 0, icons_enabled: false, ready: false, opened_at: Instant::now(), geometry_dirty_at: None })
                             })();
                             match result {
                                 Ok(created) => { dashboard = Some(created); if let Some(monitor) = &monitor { if let Err(error) = monitor.arm_ui_timeout() { show_message(&error); } } let _ = proxy.send_event(AppEvent::RefreshDashboard); }
@@ -1765,6 +2257,15 @@ fn run() -> Result<(), String> {
                     let _ = proxy.send_event(AppEvent::RefreshDashboard);
                 }
             }
+            Event::UserEvent(AppEvent::ApplicationResolved {generation, hwnd, path, result}) => {
+                tracker.application_resolved(generation, hwnd, path, result);
+                let _ = proxy.send_event(AppEvent::RefreshDashboard);
+            }
+            Event::UserEvent(AppEvent::SaveIconColors(colors)) => {
+                if let Err(error) = save_preference(&csv_path.with_extension("settings.json"), "icon_colors", colors) {
+                    diagnostics::record(&format!("icon_colors_save_error: {error}"));
+                }
+            }
             Event::UserEvent(AppEvent::SetIdlePause(enabled)) => {
                 if let Err(error) = tracker.set_idle_pause(enabled) { show_message(&error); }
                 if let Some(remaining) = tracker.idle_deadline() { let _ = deadline_sender.send(remaining); }
@@ -1790,8 +2291,9 @@ fn run() -> Result<(), String> {
                         let settings_path = csv_path.with_extension("settings.json");
                         let geometry = WindowGeometry::load(&settings_path, "settings_window", 460.0, 560.0);
                         let window = WindowBuilder::new().with_visible(false).with_window_icon(Some(window_icon())).with_title("Configuración — Screen Time")
-                            .with_inner_size(LogicalSize::new(geometry.width, geometry.height)).with_maximized(geometry.maximized)
+                            .with_inner_size(LogicalSize::new(geometry.width, geometry.height))
                             .with_min_inner_size(LogicalSize::new(340.0, 340.0)).build(target).map_err(|e| e.to_string())?;
+                        geometry.restore(&window);
                         let html = include_str!("../assets/settings.html")
                             .replace("__CSS__", include_str!("../assets/dashboard.css"))
         .replace("__VIEW_STATE_JS__", include_str!("../assets/view-state.js"))
@@ -1799,7 +2301,7 @@ fn run() -> Result<(), String> {
                         let webview = wry::WebViewBuilder::new().with_html(html)
                             .with_ipc_handler(|request| handle_ipc(request.body())).build(&window).map_err(|e| e.to_string())?;
                         let id = window.id();
-                        Ok(Dashboard { webview, window, id, geometry, settings_path, settings_key: "settings_window", icon_cache: BTreeMap::new(), unresolved_icons: Default::default(), icons_loading: false, icon_generation: 0, icons_enabled: false, ready: false, opened_at: Instant::now() })
+                        Ok(Dashboard { webview, window, id, geometry, settings_path, settings_key: "settings_window", icon_cache: BTreeMap::new(), unresolved_icons: Default::default(), icons_loading: false, icon_generation: 0, icons_enabled: false, ready: false, opened_at: Instant::now(), geometry_dirty_at: None })
                     })();
                     match result { Ok(created) => { settings = Some(created); if let Some(monitor) = &monitor { if let Err(error) = monitor.arm_ui_timeout() { show_message(&error); } } }, Err(error) => show_message(&error) }
                 }
@@ -1818,9 +2320,14 @@ fn run() -> Result<(), String> {
                 if let (Ok(data), Some(current)) = (&mut snapshot, dashboard.as_mut()) {
                     let mut images = serde_json::Map::new();
                     let mut missing = Vec::new();
+                    let presentation = tracker.grouping.presentation(&tracker.applications);
                     for labels in [data["labels"].as_array(), data["week"]["labels"].as_array()].into_iter().flatten() {
                         for label in labels {
                             if let Some(name) = label.as_str() {
+                                if let Some(icon) = presentation.get(name).and_then(|metadata| metadata.icon) {
+                                    images.insert(name.into(), icon.into());
+                                    continue;
+                                }
                                 let key = name.to_lowercase();
                                 let path = tracker.process_paths.get(&key);
                                 if let Some(Some(url)) = path.and_then(|path| current.icon_cache.get(path)) {
@@ -1872,9 +2379,9 @@ fn run() -> Result<(), String> {
                 if dashboard.as_ref().map(|current| current.id) == Some(window_id) { close_dashboard(&mut settings); close_dashboard(&mut dashboard); tracker.daily_summary = None; trim_background_memory(); }
                 else if dashboard.is_none() && settings.is_none() { tracker.daily_summary = None; trim_background_memory(); }
             }
-            Event::WindowEvent { window_id, event: WindowEvent::Resized(_), .. } => {
+            Event::WindowEvent { window_id, event: WindowEvent::Resized(_) | WindowEvent::Moved(_), .. } => {
                 for current in dashboard.iter_mut().chain(settings.iter_mut()) {
-                    if current.id == window_id { current.geometry.capture(&current.window); }
+                    if current.id == window_id && current.ready { current.geometry.capture(&current.window); current.geometry_dirty_at = Some(Instant::now()); }
                 }
             }
             Event::LoopDestroyed => {
@@ -1886,6 +2393,21 @@ fn run() -> Result<(), String> {
                 diagnostics::record("event_loop_ended");
             }
             _ => {}
+        }
+        if !matches!(*control_flow, ControlFlow::Exit) {
+            for current in dashboard.iter_mut().chain(settings.iter_mut()) {
+                if let Some(changed) = current.geometry_dirty_at {
+                    let deadline = changed + Duration::from_secs(1);
+                    if Instant::now() >= deadline {
+                        if let Err(error) = save_preference(&current.settings_path, current.settings_key, current.geometry.to_json()) {
+                            diagnostics::record(&format!("window_geometry_save_error: {error}"));
+                        }
+                        current.geometry_dirty_at = None;
+                    } else if !matches!(*control_flow, ControlFlow::WaitUntil(existing) if existing <= deadline) {
+                        *control_flow = ControlFlow::WaitUntil(deadline);
+                    }
+                }
+            }
         }
     });
 }

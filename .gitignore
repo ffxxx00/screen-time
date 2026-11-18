@@ -1,13 +1,16 @@
 # Perfil inicial (17 MB), archivos temporales y metadatos de IDE/Windows
 /target/
 /.agents/
-!/.agents/
-/.agents/*
-!/.agents/skills/
-/.agents/skills/*
-!/.agents/skills/screen-time-maintenance/
+/.github/
+/docs/auditoria-*/
+/docs/AUDITORIA-*.md
 /node_modules/
 /dist/
+# Datos personales del tracker, incluso si se copian accidentalmente al checkout
+app_usage.*
+lifecycle.log
+lifecycle.previous.log
+*.exe.WebView2/
 **/*.rs.bk
 *.pdb
 *.ilk

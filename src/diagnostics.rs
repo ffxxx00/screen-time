@@ -11,7 +11,7 @@ pub fn record(event: &str) {
     let Some(base) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) else {
         return;
     };
-    let directory = base.join("HorariosTracker");
+    let directory = base.join("Screen Time");
     if fs::create_dir_all(&directory).is_err() {
         return;
     }

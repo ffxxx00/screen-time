@@ -1,37 +1,53 @@
-# Publicar una versión personal
+# Publicar Screen Time
 
-Esta guía es para el mantenedor del proyecto. Subir el código a GitHub y etiquetarlo no equivale a certificar su precisión o confiabilidad.
+La primera release pública se prepara como **0.3.0** para Windows 10/11 x64. Esta guía describe el proceso; no implica que ya se haya publicado ni probado en Windows limpio.
 
-## Revisión antes de publicar
+## Revisar el repositorio
 
-1. Comprueba que `LICENSE`, licencia Chart.js y avisos de crates están presentes.
-2. Revisa `git status --short`; confirma que `target/`, el historial de LocalAppData, rutas privadas, backups y cualquier `.env` no estén incluidos.
-3. Actualiza `Cargo.toml`, `Cargo.lock`, `assets/app.rc` y `CHANGELOG.md` conjuntamente al versionar un release.
-4. En un prompt x64 Native Tools limpio, ejecuta:
+- Revisar `git status`, diff y archivos rastreados. No incluir historiales, backups, exportaciones, credenciales ni rutas personales. `.gitignore` no elimina archivos ya rastreados ni secretos del historial Git.
+- Revisar también el historial Git antes de cambiar la visibilidad del repositorio.
+- Mantener versión coherente en `Cargo.toml`, `Cargo.lock`, `assets/app.rc` y `CHANGELOG.md`.
+- Revisar LICENSE, privacidad y avisos de dependencias, incluidas las transitivas. Los informes de auditorías anteriores son evidencia histórica, no validación de esta compilación.
 
-   ```bat
-   cargo fmt --all -- --check
-   cargo build --release --locked --target x86_64-pc-windows-msvc
-   cargo test --locked --target x86_64-pc-windows-msvc
-   ```
+## Compilar y comprobar
 
-5. Revisa el binario como archivo PE sin consola y los recursos de icono/versión. Instala WebView2 Runtime si hace falta.
-6. Revisa el uso de RAM/CPU por separado para el daemon inactivo y el dashboard abierto. Prueba el timer de checkpoint, recuperación parcial, suspensión, reanudación automática, bloqueo, unlock, fin de sesión y el arranque en Windows limpio. El comportamiento de energía necesita una máquina Windows real.
-7. Prueba la actualización con datos de ejemplo en otro perfil temporal; comprueba acceso directo, autoarranque y retención del historial. No copies historiales reales a runners de CI ni a issues.
+Desde un entorno x64 Native Tools con Rust, Windows SDK y Node 22 o posterior:
 
-## Crear un release de GitHub
+```powershell
+cargo fmt --all -- --check
+cargo test --locked --target x86_64-pc-windows-msvc
+cargo build --release --locked --target x86_64-pc-windows-msvc
+npm ci --ignore-scripts
+npm test
+.\tests\install.test.ps1
+.\tests\uninstall.test.ps1
+.\tools\package-release.ps1
+.\tools\build-setup.ps1
+.\tests\setup.test.ps1
+.\tests\package.test.ps1
+```
 
-1. Etiqueta una versión, por ejemplo `v0.2.0`, solo después de completar la validación descrita arriba.
-2. Compila el binario para `x86_64-pc-windows-msvc` y crea un ZIP que contenga `screen-time.exe`, `LICENSE`, `README.md`, `assets/CHARTJS-LICENSE.txt` y un paso de instalación que también actualice el Registro y los accesos directos.
-3. Calcula un SHA-256 para el ZIP y publícalo en las notas del release.
-4. Indica Windows/arquitectura, WebView2 requerido, estado de firma digital, pasos de actualización/desinstalación y limitaciones conocidas.
-5. No describas el binario como firmado o instalado si no verificaste la firma, el checksum y los accesos directos publicados.
+El empaquetado incluye documentación técnica seleccionada, licencias y scripts de instalación; excluye capturas e informes históricos de auditoría. El asistente EXE incrusta el ZIP y comprueba su integridad antes de instalar. Las pruebas de paquete y rollback usan carpetas temporales y datos sintéticos.
 
-`tools/package-release.ps1` genera el ZIP y su SHA-256 en `dist/`. El paquete incluye `Instalar.cmd`, que usa el mismo instalador transaccional que el checkout. Consulta [Validación](VALIDACION.md) y ejecuta sus pruebas antes de publicar.
+Comprobar además la matriz manual de [VALIDACION.md](VALIDACION.md), especialmente instalación en Windows limpio, WebView2 ausente, apertura, reinicio, autoarranque, actualización, desinstalación y energía. No sustituirla por tests unitarios.
 
-## Firma y advertencias de Windows
+## Archivos de la release
 
-Para uso propio, se puede ejecutar una compilación local sin firmar según la política del equipo. Para distribuir fuera de GitHub, considera firma Authenticode y publica siempre SHA-256. Una firma no asegura automáticamente reputación SmartScreen para cada descarga nueva; consulta [la guía oficial de SmartScreen](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation).
+Publicar juntos estos cuatro archivos de `dist/`:
 
+- `screen-time-0.3.0-setup-x64.exe`
+- `screen-time-0.3.0-setup-x64.exe.sha256`
+- `screen-time-0.3.0-windows-x64.zip`
+- `screen-time-0.3.0-windows-x64.zip.sha256`
 
-Desde 0.3.0, después de generar el ZIP ejecuta `tools/build-setup.ps1`. Produce `screen-time-0.3.0-setup-x64.exe` y su checksum. `tests/setup.test.ps1` valida el EXE, su extracción, rechazo de un paquete alterado y limpieza de temporales. El asistente requiere .NET Framework de Windows 10/11 y usa el mismo instalador por usuario, con WebView2 como requisito previo. En CI se publican ZIP, setup y checksums como artefactos. La firma Authenticode sigue siendo una decisión de distribución independiente.
+Para comprobar una descarga: `Get-FileHash .\screen-time-0.3.0-setup-x64.exe -Algorithm SHA256` y comparar con el archivo `.sha256` de la misma release. Los hashes detectan cambios; no sustituyen una firma de autor.
+
+## Publicación en GitHub
+
+1. Terminar las comprobaciones y registrar los resultados reales en VALIDACION.md. Marcar pendientes sin atribuirles resultados.
+2. Crear el commit definitivo y la etiqueta `v0.3.0` sobre ese commit; compilar y empaquetar esa misma fuente.
+3. Crear un borrador de release y adjuntar los cuatro archivos. Los archivos se generan localmente con los comandos anteriores.
+4. Incluir funciones, Windows x64, requisito WebView2, instrucciones de instalación/desinstalación, conservación de datos, ausencia de firma y limitaciones conocidas.
+5. Verificar descargas y hashes antes de publicar el borrador. Si la validación requerida sigue pendiente, mantener el borrador o declarar explícitamente una versión preliminar.
+
+La aplicación y el instalador están sin firma Authenticode salvo que el mantenedor los firme por separado. Si se firman, regenerar los hashes de los archivos finales y repetir su comprobación.

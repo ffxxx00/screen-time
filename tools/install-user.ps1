@@ -4,12 +4,9 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot
 if (-not $SourceDirectory) { $SourceDirectory = if (Test-Path -LiteralPath (Join-Path $projectRoot 'screen-time.exe')) { $projectRoot } else { Join-Path $projectRoot 'target\x86_64-pc-windows-msvc\release' } }
 $sourceExe = Join-Path $SourceDirectory 'screen-time.exe'
-$legacyInstallRoot = Join-Path $env:LOCALAPPDATA 'Programs\HorariosTracker'
-$previousInstallRoot = Join-Path $env:LOCALAPPDATA 'Programs\Tiempo en pantalla'
 $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\Screen Time'
 $installedExe = Join-Path $installRoot 'screen-time.exe'
-$legacyExe = Join-Path $legacyInstallRoot 'horarios-tracker.exe'
-$dataRoot = Join-Path $env:LOCALAPPDATA 'HorariosTracker'
+$dataRoot = Join-Path $env:LOCALAPPDATA 'Screen Time'
 if (-not (Test-Path -LiteralPath $sourceExe)) { throw 'Primero compila la version Release.' }
 if (-not (Test-WebView2Runtime)) {
     throw 'Falta Microsoft Edge WebView2 Runtime. Instálalo desde https://developer.microsoft.com/microsoft-edge/webview2/ y vuelve a ejecutar Instalar.cmd.'
@@ -27,7 +24,7 @@ public static class TrackerInstall {
  public static bool HasLifecycleWindow(uint target) {
   bool found=false;
   EnumWindows((hwnd,param)=>{uint pid;GetWindowThreadProcessId(hwnd,out pid);
-   if(pid==target){var name=new StringBuilder(256);GetClassNameW(hwnd,name,256);if(name.ToString()=="HorariosTracker.Lifecycle"){found=true;return false;}}return true;
+   if(pid==target){var name=new StringBuilder(256);GetClassNameW(hwnd,name,256);if(name.ToString()=="Screen Time.Lifecycle"){found=true;return false;}}return true;
   },IntPtr.Zero);return found;
  }
  public static uint FindThread(uint target) {
@@ -71,16 +68,16 @@ if ($hadUninstallKey) {
  $properties = Get-ItemProperty -Path $uninstallKey
  foreach ($name in $uninstallFields) { $oldUninstall[$name] = $properties.$name }
 }
-$startupEnabled = $null -ne (Get-ItemProperty -Path $runKey -Name HorariosTracker -ErrorAction SilentlyContinue)
-$allowedDirs = @((Split-Path $sourceExe), $installRoot, $previousInstallRoot, $legacyInstallRoot)
-$running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like 'horarios-tracker*' -or $_.ProcessName -like 'tiempo-en-pantalla*' -or $_.ProcessName -like 'screen-time*' } | Where-Object { $_.Path -and $allowedDirs -contains (Split-Path $_.Path) })
+$startupEnabled = $null -ne (Get-ItemProperty -Path $runKey -Name 'Screen Time' -ErrorAction SilentlyContinue)
+$allowedDirs = @((Split-Path $sourceExe), $installRoot)
+$running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like 'screen-time*' } | Where-Object { $_.Path -and $allowedDirs -contains (Split-Path $_.Path) })
 $restartExe = if ($running.Count) { $running[0].Path } else { $null }
 $payload = Join-Path ([IO.Path]::GetTempPath()) ('screen-time-payload-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $payload | Out-Null
 $linkPaths = @((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Screen Time.lnk'), (Join-Path ([Environment]::GetFolderPath('Programs')) 'Screen Time.lnk'))
 $linkBackups = @{}
 foreach ($link in $linkPaths) { $linkBackups[$link] = if (Test-Path -LiteralPath $link) { [IO.File]::ReadAllBytes($link) } else { $null } }
-$oldStartup = (Get-ItemProperty -Path $runKey -Name HorariosTracker -ErrorAction SilentlyContinue).HorariosTracker
+$oldStartup = (Get-ItemProperty -Path $runKey -Name 'Screen Time' -ErrorAction SilentlyContinue).'Screen Time'
 $backup = $null
 try {
  Copy-Item -LiteralPath $sourceExe -Destination (Join-Path $payload 'screen-time.exe')
@@ -109,7 +106,7 @@ if (Test-Path -LiteralPath $dataRoot) {
    $shortcut.WorkingDirectory = $installRoot; $shortcut.IconLocation = "$installedExe,0"
    $shortcut.Description = 'Screen Time'; $shortcut.Save()
   }
-  if ($startupEnabled) { New-ItemProperty -Path $runKey -Name HorariosTracker -Value ('"' + $installedExe + '"') -PropertyType String -Force | Out-Null }
+  if ($startupEnabled) { New-ItemProperty -Path $runKey -Name 'Screen Time' -Value ('"' + $installedExe + '"') -PropertyType String -Force | Out-Null }
   New-Item -Path $uninstallKey -Force | Out-Null
   $registration = @{
    DisplayName = 'Screen Time'
@@ -132,8 +129,8 @@ if (Test-Path -LiteralPath $dataRoot) {
   if ($null -ne $linkBackups[$link]) { [IO.File]::WriteAllBytes($link, $linkBackups[$link]) }
   elseif (Test-Path -LiteralPath $link) { Remove-Item -LiteralPath $link }
  }
- if ($null -ne $oldStartup) { New-ItemProperty -Path $runKey -Name HorariosTracker -Value $oldStartup -PropertyType String -Force | Out-Null }
- elseif (Get-ItemProperty -Path $runKey -Name HorariosTracker -ErrorAction SilentlyContinue) { Remove-ItemProperty -Path $runKey -Name HorariosTracker }
+ if ($null -ne $oldStartup) { New-ItemProperty -Path $runKey -Name 'Screen Time' -Value $oldStartup -PropertyType String -Force | Out-Null }
+ elseif (Get-ItemProperty -Path $runKey -Name 'Screen Time' -ErrorAction SilentlyContinue) { Remove-ItemProperty -Path $runKey -Name 'Screen Time' }
  if ($hadUninstallKey) {
   New-Item -Path $uninstallKey -Force | Out-Null
   foreach ($name in $uninstallFields) {
@@ -153,8 +150,6 @@ if (Test-Path -LiteralPath $dataRoot) {
   Remove-Item -LiteralPath $resolvedPayload -Recurse -Force -ErrorAction SilentlyContinue
  }
 }
-try { Remove-LegacyArtifacts -LegacyInstallDirectory $legacyInstallRoot -ShortcutDirectories @([Environment]::GetFolderPath('Desktop'),[Environment]::GetFolderPath('Programs')) } catch { Write-Warning "Instalación completada; revisa la versión anterior manualmente: $_" }
-try { Remove-PreviousProductArtifacts -PreviousInstallDirectory $previousInstallRoot -ShortcutDirectories @([Environment]::GetFolderPath('Desktop'),[Environment]::GetFolderPath('Programs')) } catch { Write-Warning "Instalación completada; revisa Tiempo en pantalla manualmente: $_" }
 $installedProcess | Select-Object Id,Path
 try { Remove-OldAppBackups -DataDirectory $dataRoot -InstallDirectory $installRoot } catch { Write-Warning "Instalacion completada; no se pudieron limpiar copias antiguas: $_" }
 Write-Output "Instalado en: $installRoot"

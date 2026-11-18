@@ -18,7 +18,7 @@ use windows_sys::Win32::{
 const INPUT: u32 = WM_APP + 10;
 const SHOW: u32 = WM_APP + 9;
 const QUIT: u32 = WM_APP + 11;
-const CLASS: &str = "HorariosTracker.Lifecycle";
+const CLASS: &str = "Screen Time.Lifecycle";
 const CHECKPOINT_TIMER: usize = 1;
 const UI_TIMEOUT_TIMER: usize = 2;
 const CHECKPOINT_INTERVAL_MS: u32 = 60_000;

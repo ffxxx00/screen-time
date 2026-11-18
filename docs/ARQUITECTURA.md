@@ -9,7 +9,7 @@
 3. `src/lifecycle.rs` crea una ventana Win32 oculta en un hilo pequeño. Atiende cambios de sesión de WTS, mensajes de energía, invocación del dashboard por una segunda instancia y un timer de checkpoint. No muestra ventanas de consola ni usa un bucle `Sleep`.
 4. El estado que llega al loop detiene el segmento durante lock, disconnect, suspend o shutdown. Al reanudarse se vuelve a consultar la ventana en primer plano. `PAUSE_AT` limita la contabilización incluso si un checkpoint quedó en la cola antes de la notificación de bloqueo.
 
-La aplicación normalmente espera mensajes Win32. Mientras el dashboard está abierto, su documento manda una solicitud IPC de actualización cada segundo; la lectura y presentación del historial solo ocurre cuando hay una ventana WebView abierta.
+La aplicación normalmente espera mensajes Win32. Mientras el dashboard está abierto, su documento manda una solicitud IPC cada segundo en Día y una vez por minuto en la semana en curso. Para una semana terminada, solo hay una consulta al navegar o cuando un evento de la aplicación requiere actualizar la vista. El panel omite los renders cuando solo cambia la hora de actualización; la lectura y presentación del historial solo ocurre cuando hay una ventana WebView abierta.
 
 ## Dashboard y configuración
 
@@ -23,11 +23,11 @@ Al iniciar solo en bandeja y al cerrar la última ventana, `EmptyWorkingSet` pid
 
 El snapshot del dashboard también agrega siete resúmenes diarios de lunes a domingo para el modo Semana. Envía el total semanal, el promedio diario y su número de días transcurridos desde el inicio de la instalación, los totales por día y las aplicaciones ordenadas por uso semanal. `app_usage.coverage.json` guarda la fecha de inicio y las fechas en que el tracker funcionó, aun sin uso registrado; la escritura es atómica y se realiza como máximo una vez por día. En instalaciones anteriores, la fecha de inicio se infiere de la creación del CSV y se adelanta si existe historial más antiguo. Una fecha con filas CSV también se considera medida para conservar la validez del historial previo. El promedio incluye todos los días desde ese inicio hasta hoy o el domingo de la semana, inclusive: un día sin datos aporta cero, aunque siga marcado como «Sin medición» en la vista diaria. Los días previos al inicio y los futuros no se incluyen. El segmento activo se suma únicamente al snapshot de cada día correspondiente; no modifica el índice ni el CSV. Si el archivo de cobertura no se puede leer, se conserva sin sobrescribir, se registra el problema en `lifecycle.log` y el seguimiento CSV continúa.
 
-`src/icons.rs` consulta los procesos activos por PID para descubrir rutas y usa la API Shell de Windows para leer iconos existentes. Codifica el PNG RGBA como `data:` local para el dashboard; no ejecuta los procesos. Las rutas conocidas se almacenan en `app_usage.paths.json`; el PNG se queda en memoria del WebView abierto. El dashboard asigna una paleta local estable por aplicación durante la sesión, compartida por gráfico, leyenda y barra de progreso; la llegada de iconos no cambia sus colores. La escala muestra minutos y la leyenda incluye las cinco categorías principales y Otras. El inspector fijado ofrece el detalle textual completo; el tooltip muestra hasta cuatro aplicaciones y no captura la rueda.
+`src/icons.rs` consulta los procesos activos por PID para descubrir rutas y usa la API Shell de Windows para leer iconos existentes. Codifica el PNG RGBA como `data:` local para el dashboard; no ejecuta los procesos. Las rutas conocidas se almacenan en `app_usage.paths.json`; el PNG se queda en memoria del WebView abierto. El dashboard extrae el color dominante del icono, ignorando transparencias, fondos blancos y bordes casi negros. Comparte el tono entre gráfico, leyenda y barra de progreso; lo guarda en icon_colors de las preferencias mediante IPC validado y escritura atómica para recuperarlo antes del primer render al reabrir. Sin icono usa un tono determinista por identidad. La escala muestra minutos y la leyenda incluye las cinco categorías principales y Otras. El inspector fijado ofrece el detalle textual completo; el tooltip muestra hasta cuatro aplicaciones y no captura la rueda.
 
 ## Archivos de datos y escritura
 
-Los datos se escriben en `%LOCALAPPDATA%\HorariosTracker`, separados del directorio de instalación. Es un nombre interno heredado que se conserva para que actualizar el nombre del producto no mueva ni duplique tu historial. `src/durability.rs` se ocupa de la sustitución de preferencias y del journal CSV.
+Los datos se escriben en `%LOCALAPPDATA%\Screen Time`, separados del directorio de instalación. `src/durability.rs` se ocupa de la sustitución de preferencias y del journal CSV.
 
 `lifecycle.log` registra inicio, solicitud de salida desde bandeja o sesión, finalización del loop y panics sin incluir nombres de aplicaciones ni contenido del historial. Se rota a `lifecycle.previous.log` al llegar a 64 KiB. La falta de una salida registrada entre dos inicios indica una terminación no observada por la aplicación; por sí sola no identifica si fue un cierre forzado, un fallo o un corte de energía. Los volcados de memoria no se activan de forma predeterminada.
 
@@ -54,13 +54,12 @@ Desde 0.3.0 los registros nuevos guardan UTC y el desfase local del inicio; mant
 La marca diaria indica que el tracker funcionó en algún momento del día; no certifica cobertura continua de 24 horas. Los días históricos sin filas CSV ni marca se muestran como «Sin medición», incluso si en realidad hubo cero uso. Una PC apagada tampoco puede medirse desde esta aplicación.
 
 El loop principal y los callbacks Win32 son parte de una aplicación interactiva de usuario, no de un servicio de Windows. El modo de inicio actual es `HKCU Run`, es decir, se ejecuta en la sesión iniciada por ese usuario. La política de bloqueo y sesión remota debe verificarse en cada configuración Windows que importe.
-- En actualizaciones desde versiones anteriores, conserva `%LOCALAPPDATA%\HorariosTracker`, `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\HorariosTracker`, `Local\HorariosTracker.Daemon` y `HorariosTracker.Lifecycle`; son IDs heredados que evitan perder el historial y permiten abrir el dashboard de una instancia ya iniciada.
 
 ## Recuperación visual y mantenimiento
 
 `assets/view-state.js` comparte la señal de carga, pantalla de error y reintento. Configuración recibe preferencias sin depender del CSV. Un temporizador Win32 independiente del checkpoint revela una carga que no termina después de 12 segundos.
 
-Las comprobaciones y recuperación de datos están en [VALIDACION.md](VALIDACION.md). La skill del proyecto está en `.agents/skills/screen-time-maintenance/SKILL.md`.
+Las comprobaciones y recuperación de datos están en [VALIDACION.md](VALIDACION.md).
 
 ## Correcciones de auditoría de diseño (30/09/2026)
 
@@ -99,3 +98,43 @@ El índice pasa a versión 3 y se reconstruye desde el CSV. La división por dí
 `installer/Setup.cs` genera un asistente Windows Forms x64 con .NET Framework de Windows 10/11. `tools/build-setup.ps1` incrusta el ZIP y su SHA-256 en un EXE gráfico sin elevación. Verifica el recurso, valida las rutas al extraer y ejecuta el instalador transaccional con una ventana de progreso. Un mutex impide ejecutar dos asistentes a la vez. La desinstalación permanece registrada en Windows. `--verify` comprueba extracción e integridad sin instalar; `--silent` realiza la misma instalación sin interfaz.
 
 La actualización respalda el historial antes del reemplazo. Si falla el arranque, restaura archivos, accesos directos, Registro y datos originales antes de reiniciar la versión anterior; conserva las escrituras fallidas en el respaldo. Un downgrade manual anterior a 0.3.0 requiere restaurar ese respaldo, porque el lector antiguo no acepta seis columnas.
+
+
+## Colores de iconos restaurados — 15 de octubre de 2026
+
+Esta decisión sustituye la paleta fija de la auditoría del 30 de septiembre: se prioriza la asociación entre icono y aplicación solicitada por el usuario. Los iconos semejantes pueden compartir tono; nombres, iconos y detalle textual mantienen la identificación. Los colores se conservan en las preferencias (hasta 512 entradas), no dependen del ranking.
+
+
+## Identidad de aplicaciones alojadas — 15 de octubre de 2026
+
+`src/app_identity.rs` consulta en un hilo COM propio el AppUserModelID explícito de ventana o de aplicación empaquetada y el nombre declarado o del Shell. Para Java analiza localmente la clase principal, módulo o JAR mediante WMI; usa el manifiesto del JAR cuando está disponible. No depende de rutas de JVM ni contiene reglas de Minecraft u otros juegos. El ejecutable es el último recurso. Las respuestas se validan por generación de foreground, PID y fecha de creación para evitar reutilización de PID y resultados tardíos. Las consultas y los mensajes de icono no bloquean el loop de seguimiento.
+
+Los registros reconocidos tienen siete columnas: las seis existentes (con identidad app: en la cuarta) más nombre visible. Las filas de tres y seis columnas conservan su interpretación; no se reescribe ni reclasifica historial anterior. El catálogo app_usage.apps.json guarda nombres e iconos PNG de ventana; los nombres se recuperan del CSV al iniciar. El borrado de historial elimina también este catálogo. La identidad semántica se mantiene si cambia la JVM; una clase de arranque compartida, metadatos ausentes, argfiles o JAR relativos pueden limitar el reconocimiento. No se registran títulos de ventanas ni comandos completos. Las versiones anteriores no interpretan las filas de siete columnas.
+
+## Compatibilidad de agrupación — 15 de octubre de 2026
+
+La identidad AppUserModelID se usa solamente para ejecutables anfitriones compartidos (Java, Python, Node, Electron genérico y hosts de Windows). Las aplicaciones nativas normales conservan la identidad por ruta; los perfiles de un navegador no crean aplicaciones distintas. grouping.rs reconstruye asociaciones de presentación desde el CSV: un nombre antiguo se une a una ruta solo cuando existe una única candidata no anfitriona; los AppUserModelID nativos ya guardados se unen a su ruta cuando es inequívoca. Día y Semana suman los segmentos por esa identidad sin modificar CSV ni el índice base. Nombres homónimos con rutas diferentes y aplicaciones alojadas permanecen separados.
+
+## Reconocimiento de ejecutables trasladados — 15 de octubre de 2026
+
+Los ejecutables nativos se identifican mediante SHA-256 en el worker de identidad, con lectura por bloques, límite de 512 MiB y caché invalidada por tamaño/fecha. No se bloquea el seguimiento. Un archivo idéntico conserva app:native:<huella inicial> aunque cambie de ruta, nombre o unidad. El catálogo apps.json guarda las huellas y ubicaciones asociadas; una actualización en una ubicación conocida conserva su identidad (como la antigua identidad por ruta). Una coincidencia exacta con otra app conocida prevalece y las rutas ambiguas no reclasifican filas antiguas. Cambiar simultáneamente versión y ubicación sin una huella conocida no se une automáticamente.
+
+Java y los ejecutores compartidos quedan excluidos; también se consulta OriginalFilename para excluir runtimes renombrados. Los metadatos de versión solo excluyen hosts: no son prueba para unir. No se implementan coincidencias por editor/producto, familia de paquete ni controles manuales de unión en esta entrega. No existe una identificación universal para todo launcher sin metadatos.
+
+Las filas nuevas app:native: llevan nombre visible y ruta; el catálogo se reconstruye parcialmente desde ellas si falta. Las filas anteriores permanecen intactas: grouping resuelve sus rutas a la identidad estable, y une el nombre antiguo cuando sus candidatas ya pertenecen a la misma app. El catálogo conserva huellas después de desaparecer la ruta original. Se necesitan observaciones previas para reconocer un archivo ya desaparecido; no se deduce su contenido a partir del nombre. Borrar historial elimina estas asociaciones junto al catálogo.
+
+## Actualizaciones y nombres Java — 4 de noviembre de 2026
+
+La agrupación de presentación reconoce carpetas de versión MSIX conservando paquete, editor, arquitectura y ruta relativa, y carpetas Squirrel app-N.N.N cuyo directorio de instalación coincide con el ejecutable. Las versiones de una misma instalación se suman en Día y Semana, incluido el historial anterior. Raíces distintas y editores distintos permanecen separados. La reconciliación reutiliza esta evidencia para registros futuros; las huellas siguen reconociendo traslados. No se agrupa solamente por nombre visible.
+
+Los alias de las clases org.prismlauncher.EntryPoint y com.threerings.projectx.client.ProjectXApp muestran Minecraft (Prism Launcher) y Spiral Knights cuando el nombre guardado era la clase técnica. Conservan nombres declarados, iconos e identidades. Se aplican al resolver y reconstruir el catálogo desde el CSV, sin reescribirlo ni fusionar otras herramientas Java con los juegos.
+
+## Reconocimiento general de aplicaciones — 4 de noviembre de 2026
+
+Esta revisión sustituye los alias específicos de juegos de la sección anterior: no hay clases ni marcas de aplicaciones codificadas en el reconocedor. El worker consulta FileDescription/ProductName para nombres nativos y OriginalFilename para reconocer runtimes renombrados. La evidencia de versión sigue separada de la evidencia de identidad: un nombre comercial coincidente nunca basta para fusionar aplicaciones.
+
+Para Java se leen los títulos Implementation-Title, Specification-Title, JavaFX-Application-Name y Bundle-Name del manifiesto que contiene la clase de entrada, incluso si no declara Main-Class. Las dependencias sin esa clase no aportan nombres. También se admiten directorios de clases y propiedades JVM explícitas de nombre de aplicación, limitadas en longitud y anteriores a los argumentos de la aplicación. Las lecturas permanecen en el worker, limitadas a 64 entradas de classpath y 64 KiB por manifiesto. No se ejecutan archivos ni se guardan comandos completos o títulos de ventana.
+
+Sin nombre declarado se presenta una derivación legible de clase/módulo, conservando su identidad. No se infiere una marca comercial. Los nombres enriquecidos del catálogo no se degradan al leer filas históricas con nombres técnicos. Las versiones agrupadas comparten el mejor nombre nativo y un icono disponible, sin copiar ni fusionar el catálogo fuente; los nombres de perfiles del navegador se excluyen de ese enriquecimiento.
+
+La agrupación Squirrel reconoce app-N.N.N aunque el directorio de instalación y el ejecutable tengan nombres distintos y aunque haya subdirectorios. Conserva la raíz y la ruta relativa para separar instalaciones y herramientas distintas. Se mantiene la agrupación MSIX por paquete, editor, arquitectura y ejecutable. No pretende reconocer todos los instaladores posibles. Argfiles, classpaths relativos sin contexto, comodines y clases de arranque compartidas sin metadatos siguen siendo límites; el historial que nunca guardó esos metadatos no permite reconstruir con certeza el nombre comercial.

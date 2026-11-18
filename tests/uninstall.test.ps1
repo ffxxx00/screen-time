@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '..\tools\uninstall-core.ps1')
 $root = Join-Path ([IO.Path]::GetTempPath()) ('screen-time-uninstall-test-' + [guid]::NewGuid().ToString('N'))
 $install = Join-Path $root 'Programs\Screen Time'
@@ -27,7 +27,7 @@ try {
     $otherLink = Join-Path $links 'Otra app.lnk'
     $shortcut = $shell.CreateShortcut($otherLink); $shortcut.TargetPath = 'C:\Windows\notepad.exe'; $shortcut.Save()
     New-Item -Path $runKey,$uninstallKey -Force | Out-Null
-    New-ItemProperty -Path $runKey -Name HorariosTracker -Value ('"' + $exe + '"') -PropertyType String | Out-Null
+    New-ItemProperty -Path $runKey -Name 'Screen Time' -Value ('"' + $exe + '"') -PropertyType String | Out-Null
     New-ItemProperty -Path $uninstallKey -Name DisplayName -Value 'Screen Time' -PropertyType String | Out-Null
     New-ItemProperty -Path $uninstallKey -Name InstallLocation -Value $install -PropertyType String | Out-Null
 
@@ -45,7 +45,7 @@ try {
     $script:stopped = $false
     Uninstall-AppFiles $install @($links) $runKey $uninstallKey { param($path) if ($path -ne $exe) { throw 'Wrong process target' }; $script:stopped = $true }
     if (-not $script:stopped -or (Test-Path -LiteralPath $exe) -or (Test-Path -LiteralPath $appLink) -or (Test-Path -LiteralPath $webViewCache) -or -not (Test-Path -LiteralPath $otherLink)) { throw 'App files or shortcuts were not removed selectively' }
-    if ((Get-ItemProperty -Path $runKey -Name HorariosTracker -ErrorAction SilentlyContinue) -or (Test-Path $uninstallKey)) { throw 'Registry entries were not removed' }
+    if ((Get-ItemProperty -Path $runKey -Name 'Screen Time' -ErrorAction SilentlyContinue) -or (Test-Path $uninstallKey)) { throw 'Registry entries were not removed' }
     if (-not (Test-Path -LiteralPath (Join-Path $install 'personal.txt')) -or [IO.File]::ReadAllText((Join-Path $data 'app_usage.csv')) -ne 'history') { throw 'Uninstall deleted user data' }
     foreach ($name in @('uninstall-user.ps1','uninstall-core.ps1')) {
         Copy-Item -LiteralPath (Join-Path (Join-Path $PSScriptRoot '..\tools') $name) -Destination (Join-Path $install $name)

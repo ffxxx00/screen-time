@@ -26,7 +26,6 @@
   document.addEventListener('keydown',event=>{if(event.key==='Escape' && usageHelp.open){usageHelp.querySelector('summary').focus();hideUsageHelp();}});
   document.addEventListener('focusin',event=>{if(!usageHelp.contains(event.target))hideUsageHelp();});
   window.addEventListener('pagehide',()=>clearTimeout(helpCloseTimer));
-  const palette = ['#6688b8', '#8da7c9', '#9c91bc', '#79aaa4', '#b6a0b2'];
   const otherColor='#aab7c5';
   const currentLabels = () => viewMode === 'week' ? latest?.week?.labels || [] : latest?.labels || [];
   const isFutureWeekDay = index => latest?.week?.days[index]>latest?.today;
@@ -40,17 +39,43 @@
     if(key==='ArrowLeft') return indices[position<0?indices.length-1:Math.max(0,position-1)];
     return null;
   };
+  const colorCacheKey='screen-time-icon-colors-v1';
   const stableColors = new Map();
-  const color = name => { if(!stableColors.has(name)) stableColors.set(name,palette[stableColors.size % palette.length]); return stableColors.get(name); };
-  // Identity is retained within this document unless two visible apps collide.
-  // The five simultaneous categories always take distinct slots; gray is reserved.
-  const prepareColors=labels=>{
-    const used=new Set();
-    labels.slice(0,5).forEach(name=>{
-      let shade=stableColors.get(name);
-      if(!palette.includes(shade) || used.has(shade))shade=palette.find(candidate=>!used.has(candidate));
-      stableColors.set(name,shade);used.add(shade);
+  try {
+    const saved=window.savedIconColors || JSON.parse(localStorage.getItem(colorCacheKey)||'[]');
+    if(Array.isArray(saved)) saved.slice(-512).forEach(entry=>{
+      if(Array.isArray(entry) && typeof entry[0]==='string' && /^#[0-9a-f]{6}$/i.test(entry[1])) stableColors.set(entry[0],entry[1]);
     });
+  } catch {}
+  const color = name => {
+    if(stableColors.has(name))return stableColors.get(name);
+    let hash=2166136261;
+    for(const char of name)hash=Math.imul(hash^char.charCodeAt(0),16777619);
+    return 'hsl('+((hash>>>0)%360)+' 58% 52%)';
+  };
+  const iconColor=img=>{
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=32;
+    const context=canvas.getContext('2d',{willReadFrequently:true});
+    if(!context)return null;
+    context.drawImage(img,0,0,32,32);
+    const pixels=context.getImageData(0,0,32,32).data,buckets=new Map();
+    for(let i=0;i<pixels.length;i+=4){
+      const [r,g,b,a]=pixels.slice(i,i+4),max=Math.max(r,g,b),min=Math.min(r,g,b);
+      // Ignore transparent pixels, white backgrounds and nearly black outlines.
+      if(a<128 || max<35 || min>225)continue;
+      const saturation=max? (max-min)/max:0;
+      const key=(r>>5)*64+(g>>5)*8+(b>>5),weight=(a/255)*(saturation>.2?4:1);
+      const bucket=buckets.get(key)||{weight:0,r:0,g:0,b:0};
+      bucket.weight+=weight;bucket.r+=r*weight;bucket.g+=g*weight;bucket.b+=b*weight;buckets.set(key,bucket);
+    }
+    const dominant=[...buckets.values()].sort((a,b)=>b.weight-a.weight)[0];
+    if(!dominant)return null;
+    let rgb=['r','g','b'].map(channel=>dominant[channel]/dominant.weight);
+    // Keep the icon hue while lifting dark colors and toning down very light ones.
+    const peak=Math.max(...rgb);
+    if(peak<145)rgb=rgb.map(value=>value+(145-peak));
+    else if(peak>225)rgb=rgb.map(value=>value*225/peak);
+    return '#'+rgb.map(value=>Math.round(value).toString(16).padStart(2,'0')).join('');
   };
   let guideColor = '#dedee5', selectedBandColor = 'rgba(0,109,224,.08)';
   const quarterGuides = {id:'quarterGuides',beforeDatasetsDraw(owner){
@@ -90,10 +115,11 @@
   const appNames = {msedge:'Microsoft Edge',chrome:'Google Chrome',firefox:'Mozilla Firefox',explorer:'Explorador de archivos',code:'Visual Studio Code',notepad:'Bloc de notas',winword:'Microsoft Word',excel:'Microsoft Excel',powerpnt:'Microsoft PowerPoint',outlook:'Microsoft Outlook',teams:'Microsoft Teams',discord:'Discord',spotify:'Spotify'};
   const appName = name => {
     const metadata=latest?.applications?.[name];
+    if(metadata?.displayName)return metadata.displayName;
     const executable=metadata?.name || (name.startsWith('path:')?name.split(/[\\/]/).pop():name);
     const process = executable.replace(/\.exe$/i, '');
     const display=appNames[process.toLowerCase()] || (/^[a-z][a-z\d _-]*$/.test(process) ? process[0].toUpperCase()+process.slice(1) : process);
-    return metadata?.suffix?`${display} · ${metadata.suffix}`:display;
+    return display;
   };
   const duration = minutes => {
     const total = Math.max(0, Math.floor(Number(minutes) + 1e-8));
@@ -113,8 +139,10 @@
     return {min:0,max:stepHours*120,ticks:{count:3,stepSize:stepHours*60,callback:value=>`${Math.round(value/60)} h`}};
   };
   const hourRange = hour => `${String(hour).padStart(2,'0')}:00–${String(hour+1).padStart(2,'0')}:00`;
-  const dayName = date => new Intl.DateTimeFormat('es-AR',{weekday:'long',day:'numeric',month:'long'}).format(new Date(`${date}T12:00:00`));
-  const shortDay = date => new Intl.DateTimeFormat('es-AR',{weekday:'short'}).format(new Date(`${date}T12:00:00`)).replace('.','');
+  const dayFormatter = new Intl.DateTimeFormat('es-AR',{weekday:'long',day:'numeric',month:'long'});
+  const weekdayFormatter = new Intl.DateTimeFormat('es-AR',{weekday:'short'});
+  const dayName = date => dayFormatter.format(new Date(`${date}T12:00:00`));
+  const shortDay = date => weekdayFormatter.format(new Date(`${date}T12:00:00`)).replace('.','');
   const weekRange = week => {
     const start=new Date(`${week.start}T12:00:00`), end=new Date(`${week.end}T12:00:00`);
     const first=new Intl.DateTimeFormat('es-AR',{day:'numeric',month:'short'}).format(start);
@@ -441,7 +469,30 @@
   document.getElementById('mode-week').onclick=()=>{if(viewMode==='week')return;viewMode='week';selectedHour=null;selectedWeekDay=null;openAppName=null;hideTooltip();window.updateUsage(latest);};
   document.getElementById('pause-tracking').onclick=()=>window.ipc.postMessage('toggle-pause');
   document.getElementById('settings').onclick = () => window.ipc.postMessage('open-settings');
+  let lastRenderKey, iconFrame = null;
+  const saveIconColors = () => {
+    const colors=[...stableColors].slice(-512);
+    try {localStorage.setItem(colorCacheKey,JSON.stringify(colors));}catch {}
+    window.ipc?.postMessage(JSON.stringify({command:'save-icon-colors',colors}));
+  };
   window.updateUsage = data => {
+    const { updated, ...usage } = data;
+    const key = JSON.stringify([viewMode, usage]);
+    const updatedMinute=updated.slice(0,5);
+    const updatedLabel=document.getElementById('updated');
+    if(updatedLabel.textContent!==updatedMinute){
+      updatedLabel.textContent=updatedMinute;
+      updatedLabel.dateTime=updatedMinute;
+    }
+    if(key!==lastRenderKey){
+      renderUsage(data);
+      lastRenderKey=key;
+    } else {
+      latest=data;
+      window.clearUsageError();
+    }
+  };
+  const renderUsage = data => {
     const previousDate=latest?.date;
     const previousLabels=rowViews.map(view=>view.name);
     if (latest && latest.date !== data.date) {
@@ -455,7 +506,9 @@
     const labels=week?data.week.labels:data.labels;
     const minutes=week?data.week.minutes:data.minutes;
     const series=week?data.week.daily:data.hourly;
-    prepareColors(labels);
+    const weekdays=week?data.week.days.map(shortDay):[];
+    const weekDayNames=week?data.week.days.map(dayName):[];
+
     document.querySelector('.dashboard').classList.toggle('is-week',week);
     document.getElementById('mode-day').setAttribute('aria-pressed',String(!week));
     document.getElementById('mode-week').setAttribute('aria-pressed',String(week));
@@ -511,12 +564,6 @@
     if(method.textContent!==description)method.textContent=description;
     document.getElementById('chart-heading').textContent=week?`Uso por día${hasUnmeasuredDay?' · — sin medición':''}`:'Tiempo de uso por hora';
     document.getElementById('empty').textContent=week ? data.week.averageDays===0?'Sin seguimiento en esta semana.':data.week.measuredDays?.some(Boolean)?'Sin uso registrado esta semana.':'Sin medición esta semana; el promedio cuenta estos días como cero.' : data.measured?'Sin uso registrado en este día.':'Sin medición en este día.';
-    const updatedMinute=data.updated.slice(0,5);
-    const updatedLabel=document.getElementById('updated');
-    if(updatedLabel.textContent!==updatedMinute){
-      updatedLabel.textContent=updatedMinute;
-      updatedLabel.dateTime=updatedMinute;
-    }
     document.getElementById('app-count').textContent = week?`Total semanal: ${data.week.averageDays===0?'—':duration(data.week.totalMinutes)}`:data.measured?`${labels.length} ${labels.length === 1 ? 'aplicación' : 'aplicaciones'}`:'';
     document.getElementById('empty').hidden = labels.length > 0;
     const key = JSON.stringify([viewMode,labels]);
@@ -525,10 +572,13 @@
     const focusedName=focusedView?.name;
     const focusedIndex=focusedView?rowViews.indexOf(focusedView):0;
     const focusedHour=focusedView?.detail.contains(document.activeElement)?focusedView.getSelectedHour():null;
-    if(rowKey!==key && rowViews.length===labels.length && labels.every(name=>rowViews.some(view=>view.name===name)) && rowKey.startsWith(`["${viewMode}"`)) {
-      rowViews=labels.map(name=>rowViews.find(view=>view.name===name));
-      document.getElementById('rows').append(...rowViews.map(view=>view.row));
-      rowKey=key;
+    if(rowKey!==key && rowViews.length===labels.length && rowKey.startsWith(`["${viewMode}"`)) {
+      const viewsByName=new Map(rowViews.map(view=>[view.name,view]));
+      if(labels.every(name=>viewsByName.has(name))){
+        rowViews=labels.map(name=>viewsByName.get(name));
+        document.getElementById('rows').append(...rowViews.map(view=>view.row));
+        rowKey=key;
+      }
     }
     if(rowKey !== key) {
       const previousIndex=previousLabels?.indexOf(openAppName) ?? -1;
@@ -555,10 +605,10 @@
         peak.append(peakSummary,readout);
         const hours=el('div','app-hours'); hours.setAttribute('role','group'); hours.setAttribute('aria-label',`Uso por ${week?'día':'hora'} de ${appName(name)}`);
         const axis=el('div','app-hours-axis');
-        if(week) data.week.days.forEach(day=>axis.append(el('span','',shortDay(day))));
+        if(week) weekdays.forEach(day=>axis.append(el('span','',day)));
         else [0,6,12,18].forEach(hour=>axis.append(el('span','',String(hour).padStart(2,'0'))));
         detail.append(detailTitle,peak,hours,axis);
-        let hourly=[],selectedAppHour=null;
+        let hourly=[],dayNames=[],selectedAppHour=null,bars=[];
         const selectAppHour=hour=>{
           if(week ? isFutureWeekDay(hour) : !(hourly[hour]>0)) return;
           selectedAppHour=hour;
@@ -568,7 +618,7 @@
           const status=week && !latest.week.measuredDays?.[hour]?'Sin medición':hourly[hour]>0?preciseDuration(hourly[hour]):'Sin uso';
           readout.textContent=`${week?dayName(latest.week.days[hour]):hourRange(hour)} · ${status}`;
         };
-        const bars=Array.from({length:week?7:24},(_,hour)=>{
+        const createBars=()=>Array.from({length:week?7:24},(_,hour)=>{
           const bar=el('button','app-hour-bar');bar.type='button';bar.tabIndex=hour===0?0:-1;
           const fill=el('span','app-hour-fill');fill.setAttribute('aria-hidden','true');bar.append(fill);
           bar.addEventListener('mouseenter',()=>selectAppHour(hour));
@@ -583,25 +633,28 @@
           hours.append(bar);return bar;
         });
         const setOpen=open=>{
+          if(open){
+            if(!bars.length) bars=createBars();
+            renderHours();
+          }
           detail.hidden=!open;button.setAttribute('aria-expanded',String(open));
           button.setAttribute('aria-label',`${appName(name)}, ${time.textContent}: ${open?'ocultar':'ver'} actividad por ${week?'día':'hora'}`);
         };
         button.onclick=()=>{
           const open=openAppName!==name;
-          rowViews.forEach(view=>view.setOpen(false));
+          rowViews.find(view=>view.name===openAppName)?.setOpen(false);
           openAppName=open?name:null;
           setOpen(open);
         };
-        row.append(button,detail);
-        return {name,row,button,fill,time,icon,detail,axis,setOpen,getSelectedHour:()=>selectedAppHour,selectHour:selectAppHour,focusHour:hour=>bars[hour].focus(),setHours(values){
-          hourly=values;
+        const renderHours=()=>{
+          if(!hourly.length) return;
           if(selectedAppHour!==null && (week?isFutureWeekDay(selectedAppHour):!(hourly[selectedAppHour]>0))) {
             selectedAppHour=null;readout.hidden=true;peakSummary.hidden=false;
             bars.forEach(bar=>bar.classList.remove('is-selected'));
           }
           const maximum=Math.max(...hourly,0);
           const peakHour=hourly.indexOf(maximum);
-          peakSummary.textContent=maximum>0?`Mayor uso: ${week?dayName(latest.week.days[peakHour]):hourRange(peakHour)} · ${preciseDuration(maximum)}`:'Sin actividad registrada';
+          peakSummary.textContent=maximum>0?`Mayor uso: ${week?dayNames[peakHour]:hourRange(peakHour)} · ${preciseDuration(maximum)}`:'Sin actividad registrada';
           bars.forEach((bar,hour)=>{
             const inactive=week?isFutureWeekDay(hour):!(hourly[hour]>0);
             bar.disabled=inactive;
@@ -612,9 +665,15 @@
             bar.classList.toggle('is-empty',!minutes);
             if(selectedAppHour===null) bar.tabIndex=hour===(maximum>0?peakHour:0)?0:-1;
             const status=week && !latest.week.measuredDays?.[hour]?'sin medición':minutes>0?preciseDuration(minutes):'sin uso';
-            bar.setAttribute('aria-label',`${week?dayName(latest.week.days[hour]):hourRange(hour)}: ${status}`);
+            bar.setAttribute('aria-label',`${week?dayNames[hour]:hourRange(hour)}: ${status}`);
           });
           if(selectedAppHour!==null) selectAppHour(selectedAppHour);
+        };
+        row.append(button,detail);
+        return {name,row,button,fill,time,icon,detail,axis,setOpen,getSelectedHour:()=>selectedAppHour,selectHour:selectAppHour,focusHour:hour=>bars[hour]?.focus(),setHours(values,names){
+          hourly=values;
+          dayNames=names;
+          if(!detail.hidden) renderHours();
         }};
       });
       document.getElementById('rows').replaceChildren(...rowViews.map(view=>view.row));
@@ -632,6 +691,21 @@
       if(url) {
         const img=el('img',''); img.alt=''; img.width=32; img.height=32;
 
+        img.onload=()=>{
+          if(!view.icon.isConnected || view.icon.dataset.src!==url)return;
+          try {
+            const shade=iconColor(img);
+            if(shade && stableColors.get(name)!==shade){
+              stableColors.set(name,shade);
+              if(iconFrame===null) iconFrame=requestAnimationFrame(()=>{
+                iconFrame=null;
+                saveIconColors();
+                hideTooltip();
+                renderUsage(latest);
+              });
+            }
+          }catch {}
+        };
         img.onerror=()=>{view.icon.classList.remove('has-image');view.icon.textContent=appName(name).slice(0,1).toUpperCase();};
         img.src=url;
         view.icon.replaceChildren(img);
@@ -640,12 +714,12 @@
     const maximum = minutes[0] || 1;
     rowViews.forEach((view,i) => {
       view.row.querySelector('.app-name').textContent=appName(view.name);
-      view.row.querySelector('.app-name').title=latest.applications?.[view.name]?.path || appName(view.name);
+      view.row.querySelector('.app-name').title=appName(view.name);
       view.icon.style.setProperty('--app-color',color(view.name));view.detail.style.setProperty('--app-color',color(view.name));
       view.time.textContent=duration(minutes[i]); view.button.setAttribute('aria-label',`${appName(view.name)}, ${view.time.textContent}: ${view.detail.hidden?'ver':'ocultar'} actividad por ${week?'día':'hora'}`); view.fill.style.width=`${minutes[i]/maximum*100}%`;
       view.fill.style.setProperty('--app-color',color(labels[i]));
-      if(week) data.week.days.forEach((day,index)=>{view.axis.children[index].textContent=shortDay(day);});
-      view.setHours(series[i]);
+      if(week) weekdays.forEach((day,index)=>{view.axis.children[index].textContent=day;});
+      view.setHours(series[i],weekDayNames);
     });
     if(openAppName && (restoreAppHour!==null || restoreAppFocus)){
       const restored=rowViews[labels.indexOf(openAppName)];
@@ -680,13 +754,13 @@
         y:{stacked:true,beginAtZero:true,max:60,display:true,ticks:{count:3,callback:value=>`${Math.round(value)} min`},grid:{display:false},border:{display:false}}
       }}
     });
-    chart.data.labels=week?data.week.days.map(shortDay):Array.from({length:24},(_,hour)=>String(hour));
+    chart.data.labels=week?weekdays:Array.from({length:24},(_,hour)=>String(hour));
     chart.data.datasets=datasets;
     const axis=week?weeklyAxis(data.week.dailyTotals):dailyAxis();
     chart.options.scales.y.min=axis.min;
     chart.options.scales.y.max=axis.max;
     chart.options.scales.y.ticks=axis.ticks;
-    chart.options.scales.x.ticks.callback=week?(_,index)=>`${shortDay(data.week.days[index])}${data.week.days[index]<=data.today && !data.week.measuredDays?.[index]?' —':''}`:(_,index)=>index%6===0?String(index).padStart(2,'0'):'';
+    chart.options.scales.x.ticks.callback=week?(_,index)=>`${weekdays[index]}${data.week.days[index]<=data.today && !data.week.measuredDays?.[index]?' —':''}`:(_,index)=>index%6===0?String(index).padStart(2,'0'):'';
     chart.options.scales.x.ticks.color=secondary;
     chart.options.scales.y.ticks.color=secondary;
     if(week && selectedWeekDay!==null){
@@ -700,6 +774,24 @@
     window.markViewReady();
   };
   const refresh=()=>window.ipc.postMessage('refresh');
-  refresh(); const timer=setInterval(refresh,1000);
-  window.addEventListener('pagehide',()=>{clearInterval(timer);hideTooltip();if(chart)chart.destroy();tooltip.remove();});
+  let lastPoll=Date.now();
+  refresh();
+  const timer=setInterval(()=>{
+    if(viewMode==='week' && latest?.week){
+      if(latest.week.end<latest.today || Date.now()-lastPoll<60_000) return;
+    }
+    lastPoll=Date.now();
+    refresh();
+  },1000);
+  window.addEventListener('pagehide',()=>{
+    clearInterval(timer);
+    if(iconFrame!==null){
+      cancelAnimationFrame(iconFrame);
+      iconFrame=null;
+      saveIconColors();
+    }
+    hideTooltip();
+    if(chart)chart.destroy();
+    tooltip.remove();
+  });
 })();

@@ -35,3 +35,10 @@ Wry usa el Microsoft Edge WebView2 Runtime Evergreen instalado en Windows. El ru
 ## Asistente de instalación
 
 El setup se compila con `csc.exe` de .NET Framework incluido en Windows 10/11 x64. Usa Windows Forms, compresión ZIP y SHA-256 del propio framework; no descarga dependencias ni requiere un servidor o compilador adicional en el equipo del usuario. PowerShell 5.1 ejecuta la transacción de instalación incluida.
+
+
+## Identificación local de aplicaciones
+
+Se usan las interfaces COM del crate windows 0.58 ya presente en el árbol de dependencias (Shell, AppModel y WMI). zip 0.6.6, licencia MIT, permite leer únicamente META-INF/MANIFEST.MF sin extraer archivos; el manifiesto se limita a 64 KiB. Cargo.lock fija las versiones. Java no es una dependencia del tracker: se consulta únicamente cuando un proceso Java ya está ejecutándose.
+
+SHA-256 de identidad nativa: sha2 0.10.9 (RustCrypto, MIT/Apache-2.0), cálculo local en segundo plano; versión fijada en Cargo.lock.

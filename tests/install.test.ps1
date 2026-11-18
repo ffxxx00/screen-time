@@ -51,40 +51,7 @@ try {
     New-Item -ItemType Directory -Path $unrelated -Force | Out-Null
     Remove-OldAppBackups $data $installed
     if (@(Get-ChildItem (Join-Path $data 'backups') -Directory -Filter 'pre-install-*').Count -ne 5 -or -not (Test-Path -LiteralPath $unrelated)) { throw 'Backup retention failed' }
-    $legacy = Join-Path $root 'Programs\HorariosTracker'
-    $links = Join-Path $root 'Desktop'
-    New-Item -ItemType Directory -Path $legacy,$links -Force | Out-Null
-    $oldExe = Join-Path $legacy 'horarios-tracker.exe'
-    [IO.File]::WriteAllText($oldExe,'old executable')
-    [IO.File]::WriteAllText((Join-Path $legacy 'personal.txt'),'keep')
-    $shell = New-Object -ComObject WScript.Shell
-    $oldLink = Join-Path $links 'Horarios Tracker.lnk'
-    $shortcut = $shell.CreateShortcut($oldLink); $shortcut.TargetPath = $oldExe; $shortcut.Save()
-    $otherLink = Join-Path $links 'Otra app.lnk'
-    $shortcut = $shell.CreateShortcut($otherLink); $shortcut.TargetPath = 'C:\Windows\notepad.exe'; $shortcut.Save()
-    Remove-LegacyArtifacts -LegacyInstallDirectory $legacy -ShortcutDirectories @($links)
-    if ((Test-Path -LiteralPath $oldExe) -or (Test-Path -LiteralPath $oldLink) -or -not (Test-Path -LiteralPath $otherLink) -or -not (Test-Path -LiteralPath (Join-Path $legacy 'personal.txt'))) { throw 'Legacy cleanup removed unrelated files or left the old executable' }
-    Remove-Item -LiteralPath (Join-Path $legacy 'personal.txt')
-    Remove-LegacyArtifacts -LegacyInstallDirectory $legacy -ShortcutDirectories @($links)
-    if (Test-Path -LiteralPath $legacy) { throw 'Empty legacy directory was not removed' }
-    $previous = Join-Path $root 'Programs\Tiempo en pantalla'
-    New-Item -ItemType Directory -Path $previous -Force | Out-Null
-    $previousExe = Join-Path $previous 'tiempo-en-pantalla.exe'
-    [IO.File]::WriteAllText($previousExe,'previous executable')
-    New-Item -ItemType Directory -Path (Join-Path $previous 'docs') | Out-Null
-    [IO.File]::WriteAllText((Join-Path $previous 'README.md'),'previous readme')
-    [IO.File]::WriteAllText((Join-Path $previous 'docs\VALIDACION.md'),'previous docs')
-    New-Item -ItemType Directory -Path (Join-Path $previous 'tiempo-en-pantalla.exe.WebView2') | Out-Null
-    [IO.File]::WriteAllText((Join-Path $previous 'tiempo-en-pantalla.exe.WebView2\cache.bin'),'cache')
-    [IO.File]::WriteAllText((Join-Path $previous 'personal.txt'),'keep')
-    $previousLink = Join-Path $links 'Tiempo en pantalla.lnk'
-    $shortcut = $shell.CreateShortcut($previousLink); $shortcut.TargetPath = $previousExe; $shortcut.Save()
-    Remove-PreviousProductArtifacts -PreviousInstallDirectory $previous -ShortcutDirectories @($links)
-    if ((Test-Path -LiteralPath $previousExe) -or (Test-Path -LiteralPath $previousLink) -or (Test-Path -LiteralPath (Join-Path $previous 'docs')) -or (Test-Path -LiteralPath (Join-Path $previous 'README.md')) -or (Test-Path -LiteralPath (Join-Path $previous 'tiempo-en-pantalla.exe.WebView2')) -or -not (Test-Path -LiteralPath $otherLink) -or -not (Test-Path -LiteralPath (Join-Path $previous 'personal.txt'))) { throw 'Product rename cleanup removed unrelated files or left the old installation' }
-    Remove-Item -LiteralPath (Join-Path $previous 'personal.txt')
-    Remove-PreviousProductArtifacts -PreviousInstallDirectory $previous -ShortcutDirectories @($links)
-    if (Test-Path -LiteralPath $previous) { throw 'Empty previous product directory was not removed' }
-    Write-Output 'Installer: WebView2 presence/absence, rollback, update, incomplete package, backup retention and legacy cleanup checks passed.'
+    Write-Output 'Installer: WebView2 presence/absence, rollback, update, incomplete package, backup retention checks passed.'
 } finally {
     $resolved = [IO.Path]::GetFullPath($root)
     if ([IO.Path]::GetDirectoryName($resolved).TrimEnd('\') -eq [IO.Path]::GetTempPath().TrimEnd('\') -and [IO.Path]::GetFileName($resolved).StartsWith('screen-time-install-test-')) {

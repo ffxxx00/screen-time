@@ -1,6 +1,6 @@
-param(
+﻿param(
     [string]$InstallDirectory = (Join-Path $env:LOCALAPPDATA 'Programs\Screen Time'),
-    [string]$DataDirectory = (Join-Path $env:LOCALAPPDATA 'HorariosTracker'),
+    [string]$DataDirectory = (Join-Path $env:LOCALAPPDATA 'Screen Time'),
     [string[]]$ShortcutDirectories = @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs')),
     [string]$RunKeyPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run',
     [string]$UninstallKeyPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Screen Time'

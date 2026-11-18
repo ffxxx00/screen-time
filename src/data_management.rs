@@ -17,10 +17,12 @@ pub fn finish_reset(csv: &Path) -> Result<(), String> {
         "daily.json",
         "coverage.json",
         "paths.json",
+        "apps.json",
         "pending.json.tmp",
         "daily.json.tmp",
         "coverage.json.tmp",
         "paths.json.tmp",
+        "apps.json.tmp",
     ] {
         match fs::remove_file(csv.with_extension(extension)) {
             Ok(()) => {}
@@ -45,7 +47,7 @@ pub fn export(csv: &Path) -> Result<PathBuf, String> {
         .join(chrono::Local::now().format("%Y%m%d-%H%M%S-%f").to_string());
     fs::create_dir_all(&folder).map_err(|error| error.to_string())?;
     fs::copy(csv, folder.join("app_usage.csv")).map_err(|error| error.to_string())?;
-    fs::write(folder.join("LEEME.txt"), "Historial local de Screen Time. CSV sin cabecera. Filas nuevas: instante UTC RFC3339, ejecutable, segundos (con fracciones), identidad por ruta, ruta y desfase UTC en segundos. Filas antiguas: fecha y hora local sin zona, ejecutable y segundos. Las filas antiguas se conservan sin inferir su zona ni ruta. Los días sin registros no certifican cero uso. Esta copia no se elimina al borrar el historial desde la aplicación.\r\n").map_err(|error| error.to_string())?;
+    fs::write(folder.join("LEEME.txt"), "Historial local de Screen Time. CSV sin cabecera. Filas de seis columnas: instante UTC RFC3339, ejecutable, segundos (con fracciones), identidad por ruta, ruta y desfase UTC en segundos. Las aplicaciones reconocidas usan identidad de aplicación y una séptima columna con su nombre visible. Filas antiguas: fecha y hora local sin zona, ejecutable y segundos. Las filas antiguas se conservan sin inferir su zona ni ruta. Los días sin registros no certifican cero uso. Esta copia no se elimina al borrar el historial desde la aplicación.\r\n").map_err(|error| error.to_string())?;
     Ok(folder)
 }
 
@@ -64,6 +66,7 @@ mod tests {
             "daily.json",
             "coverage.json",
             "paths.json",
+            "apps.json",
             "settings.json",
         ] {
             fs::write(csv.with_extension(extension), "{}").unwrap();
@@ -74,6 +77,7 @@ mod tests {
         assert!(csv.with_extension("settings.json").exists());
         assert!(!csv.with_extension("pending.json").exists());
         assert!(!csv.with_extension("coverage.json").exists());
+        assert!(!csv.with_extension("apps.json").exists());
         finish_reset(&csv).unwrap();
     }
 

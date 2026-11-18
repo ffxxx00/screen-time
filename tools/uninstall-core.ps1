@@ -1,4 +1,4 @@
-function Uninstall-AppFiles {
+﻿function Uninstall-AppFiles {
     param(
         [Parameter(Mandatory)][string]$InstallDirectory,
         [Parameter(Mandatory)][string[]]$ShortcutDirectories,
@@ -65,9 +65,9 @@ function Uninstall-AppFiles {
         try { Remove-Item -LiteralPath $webViewCache -Recurse -Force }
         catch { Write-Warning "La caché de WebView2 quedó en $($webViewCache): $_" }
     }
-    $runValue = (Get-ItemProperty -Path $RunKeyPath -Name HorariosTracker -ErrorAction SilentlyContinue).HorariosTracker
+    $runValue = (Get-ItemProperty -Path $RunKeyPath -Name 'Screen Time' -ErrorAction SilentlyContinue).'Screen Time'
     if ($runValue -and $runValue.Trim('"') -ieq $exe) {
-        Remove-ItemProperty -Path $RunKeyPath -Name HorariosTracker
+        Remove-ItemProperty -Path $RunKeyPath -Name 'Screen Time'
     }
     $registered = Get-ItemProperty -Path $UninstallKeyPath -ErrorAction SilentlyContinue
     if ($registered -and $registered.InstallLocation -ieq $root -and $registered.DisplayName -eq 'Screen Time') {

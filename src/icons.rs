@@ -63,7 +63,7 @@ pub fn icon_url(path: &Path) -> Option<String> {
         return None;
     }
     let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
-    let rgba = unsafe {
+    let icon = unsafe {
         let mut info: SHFILEINFOW = std::mem::zeroed();
         if SHGetFileInfoW(
             wide.as_ptr(),
@@ -75,9 +75,53 @@ pub fn icon_url(path: &Path) -> Option<String> {
         {
             return None;
         }
+        info.hIcon
+    };
+    owned_icon_url(icon)
+}
+
+pub fn window_icon_url(hwnd: usize) -> Option<String> {
+    unsafe {
+        let hwnd = hwnd as windows_sys::Win32::Foundation::HWND;
+        let mut icon = std::ptr::null_mut();
+        for kind in [ICON_BIG, ICON_SMALL2] {
+            let mut result = 0usize;
+            let _ = SendMessageTimeoutW(
+                hwnd,
+                WM_GETICON,
+                kind as usize,
+                0,
+                SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                150,
+                &mut result,
+            );
+            icon = result as windows_sys::Win32::UI::WindowsAndMessaging::HICON;
+            if !icon.is_null() {
+                break;
+            }
+        }
+        if icon.is_null() {
+            icon = GetClassLongPtrW(hwnd, GCLP_HICON) as _;
+        }
+        if icon.is_null() {
+            icon = GetClassLongPtrW(hwnd, GCLP_HICONSM) as _;
+        }
+        if icon.is_null() {
+            return None;
+        }
+        let owned = CopyIcon(icon);
+        if owned.is_null() {
+            return None;
+        }
+        owned_icon_url(owned)
+    }
+}
+
+fn owned_icon_url(icon: windows_sys::Win32::UI::WindowsAndMessaging::HICON) -> Option<String> {
+    let rgba = unsafe {
         let dc = CreateCompatibleDC(ptr::null_mut());
         if dc.is_null() {
-            DestroyIcon(info.hIcon);
+            DestroyIcon(icon);
             return None;
         }
         let mut bitmap: BITMAPINFO = std::mem::zeroed();
@@ -91,17 +135,17 @@ pub fn icon_url(path: &Path) -> Option<String> {
         let dib = CreateDIBSection(dc, &bitmap, DIB_RGB_COLORS, &mut bits, ptr::null_mut(), 0);
         if dib.is_null() {
             DeleteDC(dc);
-            DestroyIcon(info.hIcon);
+            DestroyIcon(icon);
             return None;
         }
         let previous = SelectObject(dc, dib);
         let pixels = std::slice::from_raw_parts_mut(bits as *mut u8, 32 * 32 * 4);
         pixels.fill(0);
-        let black_ok = DrawIconEx(dc, 0, 0, info.hIcon, 32, 32, 0, ptr::null_mut(), DI_NORMAL);
+        let black_ok = DrawIconEx(dc, 0, 0, icon, 32, 32, 0, ptr::null_mut(), DI_NORMAL);
         GdiFlush();
         let black = pixels.to_vec();
         pixels.fill(255);
-        let white_ok = DrawIconEx(dc, 0, 0, info.hIcon, 32, 32, 0, ptr::null_mut(), DI_NORMAL);
+        let white_ok = DrawIconEx(dc, 0, 0, icon, 32, 32, 0, ptr::null_mut(), DI_NORMAL);
         GdiFlush();
         let mut rgba = vec![0; pixels.len()];
         for i in (0..pixels.len()).step_by(4) {
@@ -118,7 +162,7 @@ pub fn icon_url(path: &Path) -> Option<String> {
         SelectObject(dc, previous);
         DeleteObject(dib);
         DeleteDC(dc);
-        DestroyIcon(info.hIcon);
+        DestroyIcon(icon);
         if black_ok == 0 || white_ok == 0 {
             return None;
         }

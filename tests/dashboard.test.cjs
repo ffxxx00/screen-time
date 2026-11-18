@@ -2,22 +2,25 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { JSDOM } = require('jsdom');
-function page(view = 'dashboard') {
-  const dom = new JSDOM(fs.readFileSync(`assets/${view}.html`, 'utf8').replace('__CSS__',fs.readFileSync('assets/dashboard.css','utf8')), { runScripts: 'outside-only' });
+function page(view = 'dashboard', savedColors) {
+  const dom = new JSDOM(fs.readFileSync(`assets/${view}.html`, 'utf8').replace('__CSS__',fs.readFileSync('assets/dashboard.css','utf8')), { runScripts: 'outside-only', url: 'https://screen-time.test/' });
   const w = dom.window, messages = [];
-  let chart, timer, cleared = false;
+  let chart, timer, frame, cleared = false;
+  if(savedColors)w.localStorage.setItem('screen-time-icon-colors-v1',savedColors);
   w.ipc = { postMessage: message => messages.push(message) };
   w.setInterval = callback => { timer = callback; return 7; };
   w.clearInterval = id => { assert.equal(id, 7); cleared = true; };
+  w.requestAnimationFrame = callback => { frame = callback; return 8; };
+  w.cancelAnimationFrame = () => { frame = undefined; };
   w.Chart = class {
     constructor(canvas, config) { this.canvas = canvas; this.data = config.data; this.options = config.options; this.options.scales.y.grid ||= {}; chart = this; }
-    update(mode) { assert.equal(mode, 'none'); }
+    update(mode) { assert.equal(mode, 'none'); this.updates = (this.updates || 0) + 1; }
     destroy() { this.destroyed = true; }
   };
   w.eval(fs.readFileSync('assets/view-state.js', 'utf8'));
   if (view === 'dashboard') w.eval(fs.readFileSync('assets/dashboard.js', 'utf8'));
   else w.eval([...w.document.querySelectorAll('script')].at(-1).textContent);
-  return { w, messages, get chart() { return chart; }, get cleared() { return cleared; }, tick: () => timer(), close: () => dom.window.close() };
+  return { w, messages, get chart() { return chart; }, get cleared() { return cleared; }, tick: () => timer(), paint: () => { const callback = frame; frame = undefined; callback?.(); }, close: () => dom.window.close() };
 }
 function usage(overrides = {}) {
   return { labels: ['game.exe'], minutes: [1.5], hourly: [Array.from({length:24}, (_,i) => i === 10 ? 1.5 : 0)],
@@ -526,7 +529,7 @@ test('main chart tooltip fits its content and exposes extra apps in the persiste
     assert.equal(tip.querySelector('.tooltip-hint').hidden,true);
   } finally { p.close(); }
 });
-test('icon arrival preserves category colors', () => {
+test('icon arrival retains fallback until image decoding succeeds', () => {
   const p=page();
   try {
     p.w.updateUsage(usage({labels:['msedge.exe']}));
@@ -719,7 +722,7 @@ test('error recovery falls back when the origin disappears and respects navigati
   }finally{settings.close();}
 });
 
-test('all visible app categories have unique colors distinct from Others through ranking, dates and modes',()=>{
+test('fallback colors distinguish fixture apps through ranking, dates and modes',()=>{
   const p=page();try{
     const labels=['a.exe','b.exe','c.exe','d.exe','e.exe','f.exe','g.exe','h.exe','i.exe','j.exe','k.exe'];
     const data=usage({labels,minutes:labels.map(()=>1),hourly:labels.map(()=>Array(24).fill(1)),week:{...usage().week,labels,minutes:labels.map(()=>1),daily:labels.map(()=>Array(7).fill(1))}});
@@ -762,7 +765,7 @@ test('weekly comparison handles increases, decreases, zero and absent history', 
   } finally {p.close();}
 });
 
-test('applications with the same executable remain distinct and use readable labels', () => {
+test('applications with the same executable remain distinct without technical suffixes in labels', () => {
   const p=page();
   try {
     const labels=['path:c:\\uno\\app.exe','path:c:\\dos\\app.exe','app.exe'];
@@ -770,10 +773,105 @@ test('applications with the same executable remain distinct and use readable lab
     const data=usage({labels,applications,minutes:[3,2,1],hourly:labels.map((_,i)=>Array.from({length:24},(_,h)=>h===10?3-i:0))});
     p.w.updateUsage(data);
     const names=[...p.w.document.querySelectorAll('.app-name')].map(node=>node.textContent);
-    assert.deepEqual(names,['App · C:\\Uno','App · C:\\Dos','App · historial anterior']);
+    assert.deepEqual(names,['App','App','App']);
     p.w.document.querySelector('.app-button').click();
     p.w.updateUsage({...data,icons:{[labels[0]]:'data:image/png;base64,AA=='}});
     assert.equal(p.w.document.querySelectorAll('.app-row').length,3);
     assert.equal(p.w.document.querySelector('.app-button').getAttribute('aria-expanded'),'true');
   } finally {p.close();}
+});
+
+
+test('complete historical weeks never poll and the current week polls once per minute',()=>{
+  const p=page();
+  try {
+    const labels=Array.from({length:120},(_,i)=>`app-${i}.exe`);
+    const week={...usage().week,labels,minutes:labels.map(()=>7),daily:labels.map(()=>Array(7).fill(1)),
+      dailyTotals:Array(7).fill(120),measuredDays:Array(7).fill(true),averageDays:7,totalMinutes:840,averageMinutes:120};
+    const data=usage({week,today:'2026-10-12',firstDate:'2026-09-20'});
+    p.w.updateUsage(data);
+    p.w.document.getElementById('mode-week').click();
+    assert.equal(p.w.document.querySelectorAll('.app-hour-bar').length,0);
+    const updates=p.chart.updates;
+    const messages=p.messages.length;
+    for(let i=0;i<10;i++) p.tick();
+    assert.equal(p.messages.length,messages);
+    p.w.updateUsage({...data,updated:'10:01:00'});
+    assert.equal(p.chart.updates,updates);
+    assert.equal(p.w.document.getElementById('updated').textContent,'10:01');
+    let now=p.w.Date.now();
+    p.w.Date.now=()=>now;
+    now+=60_000;
+    p.tick();
+    assert.equal(p.messages.length,messages);
+    p.w.document.getElementById('next').click();
+    assert.deepEqual(JSON.parse(p.messages.at(-1)),{command:'select-date',date:'2026-10-05'});
+    const nextWeek={...week,start:'2026-10-05',end:'2026-10-11',days:week.days.map((_,i)=>`2026-10-${String(i+5).padStart(2,'0')}`)};
+    p.w.updateUsage({...data,date:nextWeek.start,week:nextWeek});
+    assert.equal(p.chart.updates,updates+1);
+    assert.equal(p.w.document.querySelectorAll('.app-row').length,labels.length);
+    p.w.document.querySelector('.app-button').click();
+    assert.equal(p.w.document.querySelectorAll('.app-hour-bar').length,7);
+    assert.match(p.w.document.querySelector('.app-hour-peak').textContent,/lunes/);
+    p.w.updateUsage({...data,date:nextWeek.start,week:nextWeek,updated:'10:02:00'});
+    p.w.document.getElementById('mode-day').click();
+    assert.equal(p.w.document.getElementById('updated').textContent,'10:02');
+    p.w.document.getElementById('mode-week').click();
+    p.w.document.getElementById('next').click();
+    assert.deepEqual(JSON.parse(p.messages.at(-1)),{command:'select-date',date:data.today});
+    p.w.updateUsage({...data,date:data.today,week:{...week,start:data.today,end:'2026-10-18',days:week.days.map((_,i)=>`2026-10-${i+12}`)}});
+    p.tick();
+    assert.equal(p.messages.at(-1),'refresh');
+    const currentMessages=p.messages.length;
+    now+=59_000;
+    p.tick();
+    assert.equal(p.messages.length,currentMessages);
+    now+=1_000;
+    p.tick();
+    assert.equal(p.messages.length,currentMessages+1);
+    assert.equal(p.messages.at(-1),'refresh');
+  } finally {p.close();}
+});
+
+test('dominant icon color ignores white background, batches updates and survives reopening',()=>{
+  const p=page();let saved;
+  try {
+    p.w.HTMLCanvasElement.prototype.getContext=()=>({drawImage(){},getImageData(){return {data:new Uint8ClampedArray([
+      255,255,255,255,255,255,255,255,255,255,255,255,220,40,50,255,220,40,50,255,0,0,0,0
+    ])};}});
+    const data=usage();
+    p.w.updateUsage({...data,labels:['game.exe','other.exe'],minutes:[1.5,1],hourly:[...data.hourly,data.hourly[0]],
+      icons:{'game.exe':'data:image/png;base64,AA==','other.exe':'data:image/png;base64,AQ=='}});
+    p.w.document.querySelector('.app-button').click();
+    const updates=p.chart.updates;
+    p.w.document.querySelectorAll('.app-icon img').forEach(img=>img.onload());
+    assert.equal(p.chart.updates,updates);
+    p.paint();
+    assert.equal(p.chart.updates,updates+1);
+    assert.equal(p.messages.filter(message=>message.includes('save-icon-colors')).length,1);
+    assert.equal(p.chart.data.datasets[0].backgroundColor,'#dc2832');
+    assert.equal(p.w.document.querySelector('.swatch').style.getPropertyValue('--app-color'),'#dc2832');
+    assert.equal(p.w.document.querySelector('.app-detail').style.getPropertyValue('--app-color'),'#dc2832');
+    assert.equal(p.w.document.querySelector('.app-button').getAttribute('aria-expanded'),'true');
+    saved=p.w.localStorage.getItem('screen-time-icon-colors-v1');
+  } finally {p.close();}
+  const reopened=page('dashboard',saved);
+  try {
+    reopened.w.updateUsage(usage());
+    assert.equal(reopened.chart.data.datasets[0].backgroundColor,'#dc2832');
+    reopened.w.document.getElementById('mode-week').click();
+    assert.equal(reopened.chart.data.datasets[0].backgroundColor,'#dc2832');
+  } finally {reopened.close();}
+});
+
+test('hosted application metadata supplies its name without exposing runtime paths or IDs',()=>{
+  const p=page();
+  try {
+    const id='app:java:class:org.example.Editor';
+    p.w.updateUsage(usage({labels:[id],applications:{[id]:{name:'javaw.exe',displayName:'Example Editor',path:'C:\\Java21\\javaw.exe'}}}));
+    const name=p.w.document.querySelector('.app-name');
+    assert.equal(name.textContent,'Example Editor');assert.equal(name.title,'Example Editor');
+    assert.equal(p.chart.data.datasets[0].label,'Example Editor');
+    assert.ok(!p.w.document.body.textContent.includes('org.example.Editor'));
+  }finally {p.close();}
 });
