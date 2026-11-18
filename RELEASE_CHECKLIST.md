@@ -1,15 +1,16 @@
-# Preparación de la primera release pública
+# Estado de publicación
 
-La versión preparada es **0.3.0**. Los comandos y archivos que se adjuntan están en [docs/PUBLICAR.md](docs/PUBLICAR.md).
+[Screen Time 0.3.0](https://github.com/ffxxx00/screen-time/releases/tag/v0.3.0) se publicó el **18 de noviembre de 2026** para Windows 10/11 x64. Los comandos para próximas versiones están en [docs/PUBLICAR.md](docs/PUBLICAR.md).
 
-- [ ] Revisar archivos rastreados e historial Git antes de hacer público el repositorio.
-- [ ] Compilar el commit definitivo y ejecutar las pruebas de Rust, dashboard, instalador, desinstalador, ZIP y setup.
-- [ ] Comprobar instalación en Windows limpio y documentar los resultados pendientes.
-- [ ] Revisar licencias directas y transitivas.
-- [ ] Adjuntar EXE, ZIP y ambos SHA-256 a un borrador de release `v0.3.0`.
-- [ ] Verificar las descargas finales y publicar con requisitos, ausencia de firma y limitaciones explícitos.
+- [x] Repositorio público; árbol de código sin carpetas internas, capturas de auditoría ni artefactos generados.
+- [x] Revisión de patrones de credenciales y nombres de archivos sensibles en el historial Git, sin coincidencias.
+- [x] Compilación Release y pruebas de Rust, dashboard, instalador, desinstalador, ZIP y setup.
+- [x] EXE, ZIP y ambos SHA-256 publicados bajo `v0.3.0`.
+- [x] Cuatro descargas públicas verificadas contra sus archivos locales.
+- [ ] Instalación y desinstalación en Windows limpio y otros equipos.
+- [ ] Revisión completa de avisos de dependencias transitivas antes de afirmar cumplimiento exhaustivo del bundle.
 
-Las secciones siguientes conservan el inventario y la evidencia previa; no sustituyen estos controles sobre el artefacto final.
+La distribución está sin firma Authenticode. Las pruebas pendientes se detallan en [VALIDACION.md](docs/VALIDACION.md).
 
 ## Incorporado
 

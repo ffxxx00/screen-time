@@ -4,15 +4,15 @@ Aplicación para Windows que registra el tiempo de uso de tus aplicaciones y lo 
 
 ## Instalar
 
-1. Descarga **screen-time-0.3.0-setup-x64.exe** de la sección **Releases** del repositorio cuando esté publicada.
+1. Descarga el [instalador de Screen Time 0.3.0](https://github.com/ffxxx00/screen-time/releases/download/v0.3.0/screen-time-0.3.0-setup-x64.exe).
 2. Ejecuta el asistente. Instala para tu usuario, sin permisos de administrador.
 3. Abre **Screen Time** desde Inicio o el escritorio.
 
 Requiere **Windows 10/11 x64** y **Microsoft Edge WebView2 Runtime**. Si falta WebView2, el asistente muestra cómo instalarlo y permite reintentar. El instalador aún no tiene firma digital.
 
-Como alternativa, extrae el ZIP de la release y ejecuta `Instalar.cmd`. No ejecutes el instalador dentro del ZIP sin extraerlo.
+Como alternativa, descarga y extrae el ZIP de la [release 0.3.0](https://github.com/ffxxx00/screen-time/releases/tag/v0.3.0) y ejecuta `Instalar.cmd`. No ejecutes el instalador dentro del ZIP sin extraerlo.
 
-**Estado:** primera release pública en preparación, versión 0.3.0. Las comprobaciones en Windows limpio y otros equipos siguen pendientes; consulta las [limitaciones y validación](docs/VALIDACION.md).
+**Versión publicada:** [0.3.0](https://github.com/ffxxx00/screen-time/releases/tag/v0.3.0), disponible desde el 18 de noviembre de 2026. Las comprobaciones en Windows limpio y otros equipos siguen pendientes; consulta las [limitaciones y validación](docs/VALIDACION.md).
 
 ## Uso
 
@@ -62,7 +62,7 @@ En `dist/` quedan el instalador EXE, el ZIP y sus archivos SHA-256. Consulta la 
 
 - [Arquitectura y formato de datos](docs/ARQUITECTURA.md)
 - [Validación y recuperación](docs/VALIDACION.md)
-- [Preparación de la release](RELEASE_CHECKLIST.md)
+- [Estado y checklist de publicación](RELEASE_CHECKLIST.md)
 - [Cambios](CHANGELOG.md) · [Dependencias](docs/DEPENDENCIAS.md)
 - [Contribuir](CONTRIBUTING.md) · [Seguridad](SECURITY.md)
 

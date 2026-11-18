@@ -2,7 +2,7 @@
 
 Los cambios notables de este proyecto se documentan aquí. El historial anterior a esta documentación no fue reconstruido a partir de commits publicados.
 
-## 0.3.0 — En preparación para la primera release pública
+## [0.3.0](https://github.com/ffxxx00/screen-time/releases/tag/v0.3.0) — 18 de noviembre de 2026
 
 - Nombre Screen Time unificado en datos locales, Registro e identificadores internos; sin migraciones de nombres anteriores.
 - README orientado a instalación y uso, guía de publicación actualizada y paquete sin capturas de auditorías.

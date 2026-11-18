@@ -1,6 +1,8 @@
 # Publicar Screen Time
 
-La primera release pública se prepara como **0.3.0** para Windows 10/11 x64. Esta guía describe el proceso; no implica que ya se haya publicado ni probado en Windows limpio.
+La primera release pública, [Screen Time 0.3.0](https://github.com/ffxxx00/screen-time/releases/tag/v0.3.0), se publicó el **18 de noviembre de 2026** para Windows 10/11 x64. Incluye instalador EXE, ZIP y sus dos SHA-256, con descargas públicas verificadas. Sigue pendiente la validación en Windows limpio y otros equipos.
+
+Esta guía documenta cómo generar y publicar versiones futuras. Una release de GitHub se asocia a una etiqueta Git; por eso su URL contiene `/releases/tag/`. Las versiones normales pueden figurar como la última release; las preliminares se identifican por separado.
 
 ## Revisar el repositorio
 
@@ -48,6 +50,6 @@ Para comprobar una descarga: `Get-FileHash .\screen-time-0.3.0-setup-x64.exe -Al
 2. Crear el commit definitivo y la etiqueta `v0.3.0` sobre ese commit; compilar y empaquetar esa misma fuente.
 3. Crear un borrador de release y adjuntar los cuatro archivos. Los archivos se generan localmente con los comandos anteriores.
 4. Incluir funciones, Windows x64, requisito WebView2, instrucciones de instalación/desinstalación, conservación de datos, ausencia de firma y limitaciones conocidas.
-5. Verificar descargas y hashes antes de publicar el borrador. Si la validación requerida sigue pendiente, mantener el borrador o declarar explícitamente una versión preliminar.
+5. Verificar descargas y hashes antes de publicar el borrador. Elegir explícitamente si corresponde a una versión normal o preliminar y documentar cualquier validación pendiente. Las versiones publicadas conservan su etiqueta y artefactos; las correcciones posteriores de documentación se publican en la rama principal.
 
 La aplicación y el instalador están sin firma Authenticode salvo que el mantenedor los firme por separado. Si se firman, regenerar los hashes de los archivos finales y repetir su comprobación.

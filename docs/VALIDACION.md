@@ -1,6 +1,8 @@
 # Validación y recuperación
 
-## Preparación pública — 18 de noviembre de 2026
+## Release pública 0.3.0 — 18 de noviembre de 2026
+
+[Release 0.3.0](https://github.com/ffxxx00/screen-time/releases/tag/v0.3.0) publicada con cuatro archivos: EXE, ZIP y sus SHA-256. Se verificaron las descargas públicas y la coincidencia de la etiqueta con el commit compilado `c5e8eeb`.
 
 Ruta única `%LOCALAPPDATA%\Screen Time` y entrada de autoarranque `Screen Time`; los identificadores de instancia y lifecycle usan el mismo nombre. Se retiraron las rutinas de migración de productos anteriores. El cambio local de carpeta se realiza una sola vez fuera del código distribuido.
 
