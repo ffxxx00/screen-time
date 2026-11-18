@@ -1,5 +1,9 @@
 # Validación y recuperación
 
+## Estado de CI, firma y reporte de seguridad
+
+GitHub Actions está habilitado para compilar, probar y empaquetar. La solicitud a SignPath Foundation fue enviada el 18/11/2026; aprobación e integración pendientes. Los binarios 0.3.0 siguen sin firma Authenticode. El reporte de VirusTotal fue asociado al SHA-256 del instalador; el informe completo y sus detecciones todavía requieren investigación. Ver [SECURITY.md](../SECURITY.md). Estas comprobaciones de identidad y firma no equivalen a una auditoría de malware.
+
 ## Release pública 0.3.0 — 18 de noviembre de 2026
 
 [Release 0.3.0](https://github.com/ffxxx00/screen-time/releases/tag/v0.3.0) publicada con cuatro archivos: EXE, ZIP y sus SHA-256. Se verificaron las descargas públicas y la coincidencia de la etiqueta con el commit compilado `c5e8eeb`.

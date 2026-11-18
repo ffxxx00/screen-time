@@ -1,5 +1,11 @@
 # Estado de publicación
 
+- [x] Workflow de Windows restaurado en GitHub Actions para compilación, pruebas y empaquetado.
+- [x] Solicitud a SignPath Foundation enviada el 18/11/2026.
+- [ ] Aprobación de SignPath e integración de firma con aprobación manual.
+- [x] Identificar por SHA-256 el instalador reportado en VirusTotal.
+- [ ] Investigar las detecciones antes de considerar resuelto el reporte.
+
 [Screen Time 0.3.0](https://github.com/ffxxx00/screen-time/releases/tag/v0.3.0) se publicó el **18 de noviembre de 2026** para Windows 10/11 x64. Los comandos para próximas versiones están en [docs/PUBLICAR.md](docs/PUBLICAR.md).
 
 - [x] Repositorio público; árbol de código sin carpetas internas, capturas de auditoría ni artefactos generados.

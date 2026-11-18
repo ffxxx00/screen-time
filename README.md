@@ -38,7 +38,15 @@ El historial refleja solamente actividad observada mientras el tracker está eje
 
 Los checkpoints se intentan cada minuto. Un cierre inesperado puede perder aproximadamente el último minuto; errores de disco pueden ampliar esa pérdida. La cobertura diaria no certifica medición continua de 24 horas. El reconocimiento de aplicaciones depende de los metadatos disponibles y puede ser incompleto.
 
-## Desarrollo
+## Code signing policy
+
+La solicitud de acceso al programa de SignPath Foundation fue enviada el 18 de noviembre de 2026 y está pendiente de respuesta. No se ha concedido un certificado ni configurado la integración de firma. Los binarios de la versión 0.3.0 están sin firma Authenticode.
+
+Las futuras firmas requerirán aprobación manual del mantenedor y compilaciones verificables desde el repositorio público. El nombre de producto deberá ser Screen Time y la versión deberá coincidir con la release. Los SHA-256 permiten comprobar integridad, pero no certifican la seguridad del software.
+
+Se recibió un reporte de detecciones de varios motores en VirusTotal para el instalador 0.3.0, identificado por su SHA-256. La investigación está pendiente; todavía no se ha confirmado si son falsos positivos. Consulta [SECURITY.md](SECURITY.md).
+
+## Compilación y pruebas
 
 Las compilaciones y pruebas automatizadas se ejecutan mediante [GitHub Actions](https://github.com/ffxxx00/screen-time/actions). El workflow genera el instalador, el ZIP y sus SHA-256 como artefactos. La integración de firma con SignPath está pendiente; los binarios actuales siguen sin firma digital.
 

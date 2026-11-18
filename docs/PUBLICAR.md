@@ -1,5 +1,13 @@
 # Publicar Screen Time
 
+## Estado de firma y revisión de seguridad
+
+La solicitud a SignPath Foundation fue enviada el 18/11/2026. La aprobación y la integración siguen pendientes; la distribución 0.3.0 está sin firma. No anunciar patrocinio, certificados ni binarios firmados mientras no estén disponibles y verificados. La política se publica bajo Code signing policy en el README y las notas de release.
+
+GitHub Actions compila, prueba y empaqueta en runners Windows. Los artefactos de CI no se firman ni sustituyen automáticamente los archivos ya publicados. La release 0.3.0 original fue compilada localmente; restaurar CI no cambia la procedencia de esos archivos.
+
+Hay un reporte abierto de detecciones en VirusTotal. Antes de cerrar la investigación, identificar el archivo por SHA-256, revisar el informe completo y contrastar su procedencia y comportamiento. Registrar conclusiones y respuestas de los proveedores sin atribuir falsos positivos no confirmados. Ver SECURITY.md.
+
 La primera release pública, [Screen Time 0.3.0](https://github.com/ffxxx00/screen-time/releases/tag/v0.3.0), se publicó el **18 de noviembre de 2026** para Windows 10/11 x64. Incluye instalador EXE, ZIP y sus dos SHA-256, con descargas públicas verificadas. Sigue pendiente la validación en Windows limpio y otros equipos.
 
 Esta guía documenta cómo generar y publicar versiones futuras. Una release de GitHub se asocia a una etiqueta Git; por eso su URL contiene `/releases/tag/`. Las versiones normales pueden figurar como la última release; las preliminares se identifican por separado.

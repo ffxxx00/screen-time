@@ -1,5 +1,11 @@
 # Seguridad y reporte responsable
 
+## Estado de la distribución y firma
+
+La versión 0.3.0 está sin firma Authenticode. El 18 de noviembre de 2026 se envió una solicitud a SignPath Foundation; su aprobación y la integración técnica siguen pendientes. El proyecto todavía no utiliza certificados de la fundación. La política de firma está en la sección Code signing policy del README.
+
+Se recibió un reporte del usuario con detecciones de Arctic Wolf, CrowdStrike Falcon, SecureAge, SentinelOne y Trapmine en VirusTotal. El [informe indicado](https://www.virustotal.com/gui/file/eb12b9e24755d927df2545431556ac14a876650f3ca888f90587e905fe8399a5) corresponde al SHA-256 `eb12b9e24755d927df2545431556ac14a876650f3ca888f90587e905fe8399a5`, que coincide con el instalador `screen-time-0.3.0-setup-x64.exe` generado para la release. El ejecutable interno `screen-time.exe` tiene un hash distinto. No se pudo revisar independientemente el informe completo. Se investiga como un reporte abierto: las etiquetas heurísticas no permiten concluir por sí solas que el archivo sea malicioso ni que las detecciones sean falsos positivos. No se recomienda desactivar el antivirus ni añadir exclusiones para ejecutarlo. Una firma digital no sustituye esta investigación.
+
 ## Datos y límites de confianza
 
 Screen Time registra localmente ejecutables y tiempos de uso del equipo del usuario. No envía datos a los mantenedores. Trata `app_usage.csv`, `app_usage.paths.json`, las preferencias y los datos de procesos como información personal: no los pegues en issues públicos.
