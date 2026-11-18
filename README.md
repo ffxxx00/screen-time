@@ -40,6 +40,8 @@ Los checkpoints se intentan cada minuto. Un cierre inesperado puede perder aprox
 
 ## Desarrollo
 
+Las compilaciones y pruebas automatizadas se ejecutan mediante [GitHub Actions](https://github.com/ffxxx00/screen-time/actions). El workflow genera el instalador, el ZIP y sus SHA-256 como artefactos. La integración de firma con SignPath está pendiente; los binarios actuales siguen sin firma digital.
+
 Requiere Rust estable, Visual Studio Build Tools con C++ y Windows SDK (`rc.exe`). En un prompt **x64 Native Tools**:
 
 ```bat

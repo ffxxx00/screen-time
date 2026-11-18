@@ -2,6 +2,9 @@
 /target/
 /.agents/
 /.github/
+!/.github/
+/.github/*
+!/.github/workflows/
 /docs/auditoria-*/
 /docs/AUDITORIA-*.md
 /node_modules/
